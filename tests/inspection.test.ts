@@ -4,7 +4,7 @@ import { escapeHtml, safeStem, semanticHtml } from '../src/lib/export';
 import { validatePdf } from '../src/lib/pdf';
 import { PRODUCT } from '../src/config';
 function page(patch: Partial<PageEvidence> = {}): PageEvidence {
-  return { number: 1, width: 612, height: 792, lines: ['Accessible lecture notes contain real text.'], sizes: Array(12).fill(12), textItems: 12, imagePaintCount: 0, structureTree: true, ...patch };
+  return { number: 1, width: 612, height: 792, lines: ['Accessible lecture notes contain real text for every student.'], sizes: Array(12).fill(12), textItems: 12, imagePaintCount: 0, structureTree: true, ...patch };
 }
 describe('evidence-based inspection', () => {
   it('does not invent issues for a text page with no identified cues', () => {
