@@ -12,7 +12,8 @@ export function semanticHtml(report: Inspection, blocks: EditableBlock[], approv
       if (block.kind === 'list') return '<ul><li>' + safe + '</li></ul>';
       return '<p>' + safe + '</p>';
     });
-    const reviewedNote = approvedNotes[page.number] ? '<aside aria-label="Reviewed figure description note"><h3>Reviewed figure description note (image not included)</h3><p>' + escapeHtml(approvedNotes[page.number]) + '</p></aside>' : '';\n    return '<section aria-labelledby="page-' + page.number + '">\n<h2 id="page-' + page.number + '">Page ' + page.number + '</h2>\n' + lines.join('\n') + reviewedNote + '\n</section>';
+    const reviewedNote = approvedNotes[page.number] ? '<aside aria-label="Reviewed figure description note"><h3>Reviewed figure description note (image not included)</h3><p>' + escapeHtml(approvedNotes[page.number]) + '</p></aside>' : '';
+    return '<section aria-labelledby="page-' + page.number + '">\n<h2 id="page-' + page.number + '">Page ' + page.number + '</h2>\n' + lines.join('\n') + reviewedNote + '\n</section>';
   });
   return '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + escapeHtml(report.name) + ' — reviewed text</title><style>body{max-width:70ch;margin:3rem auto;padding:0 1rem;font:1.125rem/1.7 system-ui;color:#1b2623}h1,h2,h3{line-height:1.25}section{padding-block:2rem;border-top:1px solid #cbd5d1}blockquote{border-left:3px solid #386c60;padding-left:1rem}</style></head><body><main><h1>' + escapeHtml(report.name) + '</h1><p><strong>Review required:</strong> This conversion is based on extracted text and human edits. Compare against the original PDF before publishing. Figures, mathematics and complex layouts may be omitted.</p>' + byPage.join('\n') + '</main></body></html>';
 }
