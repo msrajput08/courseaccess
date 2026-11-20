@@ -19,7 +19,7 @@ test('real two-page PDF can be inspected, edited and exported',async({page})=>{
   await page.getByRole('button',{name:'Edit text'}).click();
   await expect(page.getByText('No text extracted')).toBeVisible();
   await page.getByRole('button',{name:/Page 01/i}).click();
-  await expect(page.getByLabel('Extracted text').first()).toContainText('Biology lecture notes');
+  await expect(page.getByLabel('Extracted text').first()).toHaveValue(/Biology lecture notes/);
   const downloading=page.waitForEvent('download');
   await page.getByRole('button',{name:/Export HTML/}).click();
   const download=await downloading;
