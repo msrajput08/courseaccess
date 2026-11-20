@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { ArrowRight, ArrowUpRight, BookOpen, BookOpenCheck, Check, CheckCircle2, ChevronRight, CloudOff, FileCode2, FileSearch, FileText, GraduationCap, Globe2, Info, LockKeyhole, Menu, RotateCcw, ScanSearch, ShieldCheck, UploadCloud, X } from 'lucide-react';
 import { PRODUCT } from './config';
@@ -28,8 +28,8 @@ function readRoute():Route {
   if(path==='/terms')return {page:'terms'};
   return {page:'home'};
 }
-function A({href,go,children,className}:{href:string;go:(s:string)=>void;children:React.ReactNode;className?:string}){
-  return <a href={href} className={className} onClick={e=>{if(!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey){e.preventDefault();go(href);}}}>{children}</a>;
+function A({href,go,children,className}:{href:string;go:(s:string)=>void;children:ReactNode;className?:string}){
+  return <a href={href} className={className} onClick={e=>{if(e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey){e.preventDefault();go(href);}}}>{children}</a>;
 }
 function Header({go,page}:{go:(s:string)=>void;page:PageName}){
   const [open,setOpen]=useState(false);
