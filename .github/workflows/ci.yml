@@ -1,8 +1,5 @@
 name: CourseAccess checks
 on:
-  push:
-    branches:
-      - "feat/**"
   pull_request:
     branches:
       - main

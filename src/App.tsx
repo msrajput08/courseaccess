@@ -97,7 +97,7 @@ export default function App(){
   const [history,setHistory]=useState<RecentRecord[]>(loadHistory);
   useEffect(()=>{const handler=()=>setRoute(readRoute());addEventListener('popstate',handler);return()=>removeEventListener('popstate',handler);},[]);
   useEffect(()=>{const guide=guides.find(g=>g.slug===route.slug);document.title=(guide?.title||names[route.page])+' — CourseAccess';const meta=document.querySelector('meta[name="description"]');if(meta)meta.setAttribute('content',guide?.description||'Private PDF accessibility inspection, honest review prompts and semantic HTML export for educators.');const canonical=document.querySelector('link[rel="canonical"]');if(canonical)canonical.setAttribute('href',(import.meta.env.VITE_PUBLIC_ORIGIN||location.origin).replace(/\/$/,'')+location.pathname);},[route]);
-  function go(path:string){const clean=path.split('#')[0]||'/';if(location.pathname!==clean)historyPush(clean);setRoute(readRoute());window.scrollTo(0,0);}
+  function go(path:string){const clean=path.split('#')[0]||'/';if(location.pathname!==clean)historyPush(clean);setRoute(readRoute());window.scrollTo(0,0);requestAnimationFrame(()=>document.getElementById('content')?.focus());}
   function historyPush(path:string){window.history.pushState({},'',path);}
   function done(r:Inspection,f:File){setInspection(r);setFile(f);window.scrollTo(0,0);}
   function newCheck(){setInspection(null);setFile(null);}
