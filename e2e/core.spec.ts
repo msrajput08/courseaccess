@@ -1,7 +1,8 @@
 import {test,expect} from '@playwright/test';
-import {makePdf} from './fixtures';
+import {makePdf,makeImageOnlyPdf} from './fixtures';
 test('marketing, navigation and pricing clearly distinguish planned features',async({page},testInfo)=>{
   await page.goto('/');
+  await page.screenshot({path:'test-results/home-'+testInfo.project.name+'.png',fullPage:true});
   await expect(page.getByRole('heading',{name:/Better learning begins with access/i})).toBeVisible();
   await page.getByRole('button',{name:/Explore reviewed example/i}).click();
   await expect(page.getByText('AFTER HUMAN REVIEW')).toBeVisible();
@@ -33,5 +34,30 @@ test('corrupt input is rejected with a user-recoverable error',async({page})=>{
 });
 test('private workspace is empty until metadata is explicitly saved',async({page})=>{
   await page.goto('/workspace');
+  await expect(page.getByText("There's no saved document history yet.")).toBeVisible();
+});
+
+test('image-only page produces a potential image-only warning and figure-review prompt',async({page})=>{
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({name:'scanned-example.pdf',mimeType:'application/pdf',buffer:makeImageOnlyPdf()});
+  await expect(page.getByRole('heading',{name:'scanned-example.pdf'})).toBeVisible({timeout:30000});
+  await expect(page.getByText('No extractable page text')).toBeVisible();
+  await expect(page.getByText('Possible image-only page')).toBeVisible();
+  await expect(page.getByText('Review figure descriptions')).toBeVisible();
+});
+test('math-containing PDF produces a human-review prompt, not an invented translation',async({page})=>{
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({name:'algebra.pdf',mimeType:'application/pdf',buffer:makePdf(['Equation 2: 3x + y = 12. Check this exact formula before distributing the lesson.'])});
+  await expect(page.getByRole('heading',{name:'algebra.pdf'})).toBeVisible({timeout:30000});
+  await expect(page.getByText('Review mathematical notation')).toBeVisible();
+});
+test('optional saved metadata can be viewed and deleted without storing document text',async({page})=>{
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({name:'private-course.pdf',mimeType:'application/pdf',buffer:makePdf(['Instructor handout with selectable text and practical course information.'])});
+  await expect(page.getByRole('heading',{name:'private-course.pdf'})).toBeVisible({timeout:30000});
+  await page.getByRole('button',{name:/Save metadata/}).click();
+  await page.goto('/workspace');
+  await expect(page.getByText('private-course.pdf')).toBeVisible();
+  await page.getByRole('button',{name:/Delete all local summaries/}).click();
   await expect(page.getByText("There's no saved document history yet.")).toBeVisible();
 });
