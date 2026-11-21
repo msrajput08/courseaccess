@@ -9,6 +9,7 @@ export interface PageEvidence {
   lineSizes?: number[];
   textItems: number;
   imagePaintCount: number;
+  linkAnnotationCount?: number;
   structureTree: boolean | null;
 }
 export const INITIAL_LIMITATIONS = [
@@ -39,6 +40,9 @@ export function detectFindings(page: PageEvidence): Finding[] {
   }
   if (page.structureTree === false && text.length > 0) {
     add('potential', 'medium', 'structure', 'Structure tree not exposed', 'PDF.js did not expose a structure tree for this page. This alone does not establish that the PDF is untagged.', 'Use a dedicated PDF accessibility validator to inspect document tags, headings, lists and reading order.');
+  }
+  if (page.linkAnnotationCount === 0 && /(?:https?:\/\/|www\.)[^\s]+/i.test(text)) {
+    add('potential','medium','structure','Visible website address may not be clickable','A visible web address was found in the extracted text, but PDF.js exposed no clickable link annotations on this page.','Use the generated HTML, which turns recognized web addresses into hyperlinks, or add an actual hyperlink in the PDF source.');
   }
   if (page.imagePaintCount > 0) {
     add('manual', 'review', 'visual', 'Review figure descriptions', page.imagePaintCount + ' image drawing operation(s) were detected. The presence or quality of alternative text cannot be determined here.', 'Check every meaningful figure for an accurate description and mark decorative images appropriately.');
@@ -89,6 +93,7 @@ export function buildInspection(name: string, size: number, pages: PageEvidence[
     text: p.lines.join('\n'),
     textItemCount: p.textItems,
     imagePaintCount: p.imagePaintCount,
+    linkAnnotationCount: p.linkAnnotationCount,
     hasStructureTree: p.structureTree,
     blocks: createBlocks(p),
   }));

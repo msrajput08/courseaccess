@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildInspection, detectFindings, type PageEvidence } from '../src/lib/inspection';
-import { escapeHtml, safeStem, semanticHtml } from '../src/lib/export';
+import { escapeHtml, linkifyText, safeStem, semanticHtml } from '../src/lib/export';
 import { validatePdf } from '../src/lib/pdf';
 import { PRODUCT } from '../src/config';
 function page(patch: Partial<PageEvidence> = {}): PageEvidence {
@@ -21,6 +21,18 @@ describe('evidence-based inspection', () => {
     const findings = detectFindings(page({lines:[],textItems:0,imagePaintCount:2}));
     expect(findings.some(f=>f.title==='Possible image-only page'&&f.kind==='potential')).toBe(true);
     expect(findings.some(f=>f.category==='visual'&&f.kind==='manual')).toBe(true);
+  });
+  it('only warns about noninteractive visible URLs when link annotations were actually checked', () => {
+    const f = detectFindings(page({lines:['Visit https://example.org/lecture'],linkAnnotationCount:0}));
+    expect(f.some(x=>x.title==='Visible website address may not be clickable')).toBe(true);
+    const linked=detectFindings(page({lines:['Visit https://example.org/lecture'],linkAnnotationCount:1}));
+    expect(linked.some(x=>x.title==='Visible website address may not be clickable')).toBe(false);
+  });
+  it('safely turns visible URLs into interactive links in HTML drafts', () => {
+    expect(linkifyText('Visit https://example.org/path.')).toContain('<a href="https://example.org/path"');
+    expect(linkifyText('Try www.example.org,')).toContain('<a href="https://www.example.org/"');
+    expect(linkifyText('<script>javascript:alert(1)</script>')).toContain('&lt;script&gt;');
+    expect(linkifyText('javascript:alert(1)')).not.toContain('<a');
   });
   it('marks math and figures for manual rather than claimed automatic repair', () => {
     const findings = detectFindings(page({lines:['Equation 3 and Figure 2 illustrate the result.']}));

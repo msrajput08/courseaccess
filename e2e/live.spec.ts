@@ -19,7 +19,7 @@ test('live routes, API and SEO respond from the published Worker', async ({page,
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href',new URL('/',testInfo.project.use.baseURL as string).toString());
   await page.screenshot({path:'test-results/live/home-'+testInfo.project.name+'.png',fullPage:true});
   await page.goto('/pricing');
-  await expect(page.getByRole('heading',{name:/Pricing and access|Pricing/i})).toBeVisible();
+  await expect(page.getByRole('heading',{name:/Make room for more learners/i})).toBeVisible();
   await expect(page.getByText('Why use CourseAccess instead of checking every page myself?')).toBeVisible();
   await page.screenshot({path:'test-results/live/pricing-'+testInfo.project.name+'.png',fullPage:true});
   expect(errors).toEqual([]);

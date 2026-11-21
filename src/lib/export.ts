@@ -3,12 +3,34 @@ import type { EditableBlock, Inspection } from '../types';
 export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] || c);
 }
+/** Safely linkify explicit web addresses in the reading draft. Never infer a link from unrelated text. */
+export function linkifyText(text: string): string {
+  const rx = /(?:https?:\/\/|www\.)[^\s<>"']+/gi;
+  let output = '', offset = 0;
+  for (const match of text.matchAll(rx)) {
+    const start = match.index;
+    const original = match[0];
+    const display = original.replace(/[.,;:!?]+$/, '');
+    output += escapeHtml(text.slice(offset, start));
+    try {
+      const url = new URL(display.startsWith('www.') ? 'https://' + display : display);
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Invalid link protocol');
+      output += '<a href="' + escapeHtml(url.href) + '" rel="noopener noreferrer">' + escapeHtml(display) + '</a>';
+    } catch {
+      output += escapeHtml(display);
+    }
+    output += escapeHtml(original.slice(display.length));
+    offset = start + original.length;
+  }
+  return output + escapeHtml(text.slice(offset));
+}
+
 export function semanticHtml(report: Inspection, blocks: EditableBlock[], approvedNotes: Record<number, string> = {}): string {
   const byPage = report.pages.map((page) => {
     const lines: string[] = [];
     let inList = false;
     for (const block of blocks.filter((b) => b.page === page.number && b.text.trim())) {
-      const safe = escapeHtml(block.text).replace(/\n/g, '<br>');
+      const safe = linkifyText(block.text).replace(/\n/g, '<br>');
       if (block.kind === 'list') {
         if (!inList) { lines.push('<ul>'); inList = true; }
         lines.push('<li>' + safe + '</li>');

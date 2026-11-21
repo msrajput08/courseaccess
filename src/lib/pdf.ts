@@ -57,10 +57,12 @@ export async function inspectPdf(file: File, progress: (value: number) => void):
         pdfjs.OPS.paintImageMaskXObject, pdfjs.OPS.paintImageMaskXObjectRepeat,
       ]);
       const imagePaintCount = ops.fnArray.filter((op) => imageCodes.has(op)).length;
+      let linkAnnotationCount: number | undefined;
+      try { linkAnnotationCount = (await page.getAnnotations({intent:'display'})).filter((annotation) => annotation.subtype === 'Link').length; } catch { linkAnnotationCount = undefined; }
       let structureTree: boolean | null = null;
       try { structureTree = !!(await page.getStructTree()); } catch { structureTree = null; }
       pages.push({ number: p, width: viewport.width, height: viewport.height,
-        lines, sizes, lineSizes, textItems: rows.length, imagePaintCount, structureTree });
+        lines, sizes, lineSizes, textItems: rows.length, imagePaintCount, linkAnnotationCount, structureTree });
       page.cleanup();
       progress(Math.round((p / pdf.numPages) * 100));
     }

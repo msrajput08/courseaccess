@@ -25,6 +25,7 @@ export interface PageInspection {
   text: string;
   textItemCount: number;
   imagePaintCount: number;
+  linkAnnotationCount?: number;
   hasStructureTree: boolean | null;
   blocks: EditableBlock[];
 }
