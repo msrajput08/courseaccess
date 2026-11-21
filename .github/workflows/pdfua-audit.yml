@@ -35,11 +35,16 @@ jobs:
         run: |
           set -euo pipefail
           for sample in typst-reference reading-basic reading-stem; do
+            result=0
             docker run --rm -v "$PWD/pdfua-artifacts:/data" \
               verapdf/cli:v1.30.4 \
               -f ua1 --format xml "/data/generated/$sample.pdf" \
               > "pdfua-artifacts/reports/$sample.xml" \
-              2> "pdfua-artifacts/reports/$sample.stderr"
+              2> "pdfua-artifacts/reports/$sample.stderr" || result=$?
+            echo "veraPDF exit for $sample: $result (nonconforming files can return nonzero)"
+            if [[ $result -ne 0 ]]; then
+              tail -n 12 "pdfua-artifacts/reports/$sample.stderr" || true
+            fi
           done
       - name: Parse exact compliance and failed rules
         run: python3 scripts/summarize_pdfua.py
