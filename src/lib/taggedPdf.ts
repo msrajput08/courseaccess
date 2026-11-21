@@ -1,4 +1,5 @@
 import type { EditableBlock, Inspection } from '../types';
+import { parseTable, formulaMathML } from './semantics';
 
 /**
  * Generate a NEW reading-order tagged PDF from inspected text and corrections.
@@ -78,6 +79,36 @@ export async function buildTaggedReadingPdf(
     doc.list(items.map(v=>v+' '),{structParent:list,bulletRadius:2,paragraphGap:4,indent:18});
     doc.moveDown(.4);
   }
+  function emitTable(section:Struct,block:EditableBlock) {
+    const parsed=parseTable(block.text);
+    if(!parsed) {
+      emit(section,'P','Table data could not be reconstructed safely: '+block.text,11);
+      return;
+    }
+    const table=doc.struct('Table');
+    section.add(table);
+    if(block.description?.trim())emit(table,'Caption',block.description.trim(),11,true);
+    for(const [index,row] of parsed.rows.entries()) {
+      const tr=doc.struct('TR');table.add(tr);
+      for(const cell of row){
+        emit(tr,index===0?'TH':'TD',cell,10,index===0);
+      }
+    }
+  }
+  function emitEquation(section:Struct,block:EditableBlock) {
+    const math=formulaMathML(block.text);
+    const explanation=block.description?.trim();
+    if(!math) {
+      emit(section,'P','Equation requires corrected LaTeX notation: '+block.text,11);
+      return;
+    }
+    const alt=explanation||'Equation '+block.text;
+    section.add(doc.struct('Formula',{alt},()=>{
+      doc.font('Reading').fontSize(11).fillColor('#20382d')
+        .text('Equation: '+block.text+' ',{paragraphGap:6,lineGap:2});
+    }));
+    if(explanation)emit(section,'P','Meaning: '+explanation,11);
+  }
   try {
     doc.addPage();
     emit(root,'H1',inspection.name.replace(/\.pdf$/i,''),19,true);
@@ -93,7 +124,10 @@ export async function buildTaggedReadingPdf(
       for(const block of current) {
         if(block.kind==='list'){pending.push(block.text.trim());continue;}
         flush();
-        const tag=block.kind==='heading'?'H3':block.kind==='blockquote'?'BlockQuote':'P';
+        if(block.kind==='table'){emitTable(section,block);continue;}
+        if(block.kind==='equation'){emitEquation(section,block);continue;}
+        const level=block.headingLevel&&[2,3,4].includes(block.headingLevel)?block.headingLevel:3;
+        const tag=block.kind==='heading'?'H'+level:block.kind==='blockquote'?'BlockQuote':'P';
         emit(section,tag,block.text,block.kind==='heading'?13:11,block.kind==='heading');
       }
       flush();
