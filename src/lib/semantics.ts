@@ -30,13 +30,13 @@ export function detectTableRows(lines:string[],start:number):ParsedTable|null {
   const group:string[]=[];
   for(let i=start;i<Math.min(lines.length,start+MAX_ROWS);i++){
     const next=[...group,lines[i]];
-    const parsed=next.length>=2?parseTable(next):null;
+    const parsed=next.length>=2?parseTable(next.join('\n')):null;
     if(next.length===2&&!parsed)break;
     if(next.length>2&&!parsed)break;
     group.push(lines[i]);
   }
   if(group.length<3)return null;
-  const parsed=parseTable(group);
+  const parsed=parseTable(group.join('\n'));
   if(!parsed)return null;
   // Only require a descriptive caption when the source explicitly includes it.
   return parsed;
