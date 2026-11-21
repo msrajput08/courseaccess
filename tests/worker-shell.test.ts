@@ -6,7 +6,7 @@ const env={
     fetch:async(request:Request)=>{
       assetCalls.push(new URL(request.url).pathname);
       const path=new URL(request.url).pathname;
-      if(path==='/index.html')return new Response('<!doctype html><html><body><script type="module" src="/assets/app-123.js"></script></body></html>',{
+      if(path==='/index.html'||path==='/'||path==='/checker'||path==='/workspace'||path==='/pricing'||path==='/guides'||path.startsWith('/guides/')||path==='/privacy'||path==='/terms')return new Response('<!doctype html><html><body><script type="module" src="/assets/app-123.js"></script></body></html>',{
         headers:{'content-type':'text/html; charset=utf-8','cache-control':'public, max-age=14400'}});
       if(path.includes('/assets/'))return new Response('export const ok=true;',{
         headers:{'content-type':'application/javascript'}});
@@ -23,7 +23,7 @@ describe('Cloudflare navigation shell cache policy',()=>{
       expect(response.headers.get('cache-control')).toMatch(/no-store/);
       expect(response.headers.get('content-type')).toContain('text/html');
       expect(await response.text()).toContain('src="/assets/app-123.js"');
-      expect(assetCalls).toEqual(['/index.html']);
+      expect(assetCalls).toEqual([path]);
     }
   );
   it('does not turn hashed asset requests into HTML navigation shells',async()=>{

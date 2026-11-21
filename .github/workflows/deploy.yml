@@ -111,28 +111,32 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
 
-      - name: Verify deployed app and Worker API
+      - name: Verify deployed HTML, assets, API and sitemap
         if: steps.credentials.outputs.ready == 'true'
         shell: bash
         env:
           DEPLOYMENT_URL: ${{ steps.publish.outputs.deployment-url }}
         run: |
+          set -euo pipefail
           if [[ -z "$DEPLOYMENT_URL" ]]; then
-            echo "::error::Cloudflare returned no deployment URL; cannot verify this release."
+            echo "::error::Cloudflare returned no deployment URL."
             exit 1
           fi
-          url="$(printf '%s' "$DEPLOYMENT_URL" | sed 's:/$::')"
-          curl --fail --silent --show-error --retry 4 --retry-delay 2 "$url/api/health" | grep -q '"status":"ok"'
-          curl --fail --silent --show-error --retry 4 --retry-delay 2 -H 'Accept: text/html' "$url/checker" | grep -q 'CourseAccess'
-          curl --fail --silent --show-error --retry 4 --retry-delay 2 "$url/sitemap.xml" | grep -q '<urlset'
+          url="${DEPLOYMENT_URL%/}"
+          node scripts/verify-deployment-assets.mjs "$url"
+          health="$(curl --fail --silent --show-error --retry 4 --retry-delay 2 "$url/api/health")"
+          if [[ "$health" != *'"status":"ok"'* ]]; then
+            echo "::error::Health endpoint returned unexpected JSON."
+            echo "$health"
+            exit 1
+          fi
+          sitemap="$(curl --fail --silent --show-error --retry 4 --retry-delay 2 "$url/sitemap.xml")"
+          if [[ "$sitemap" != *'<urlset'* ]]; then
+            echo "::error::Sitemap did not contain the expected XML root."
+            exit 1
+          fi
           echo "Verified deployment: $url" >> "$GITHUB_STEP_SUMMARY"
-          echo "Checker route, health API and sitemap responded successfully." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Verify deployed HTML points to real JavaScript and CSS
-        if: steps.credentials.outputs.ready == 'true'
-        env:
-          DEPLOYMENT_URL: ${{ steps.publish.outputs.deployment-url }}
-        run: node scripts/verify-deployment-assets.mjs "$DEPLOYMENT_URL"
+          echo "Fresh HTML, hashed JavaScript and styles, health API, sitemap all verified." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install browser for live product tests
         if: steps.credentials.outputs.ready == 'true'
