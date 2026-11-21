@@ -98,3 +98,48 @@ test('invalid office archive is rejected without entering workspace',async({page
   await expect(page.getByRole('alert')).toContainText(/not a valid ZIP|archive could not be opened/i);
   await expect(page.getByRole('heading',{name:'corrupt.docx'})).toHaveCount(0);
 });
+
+
+test('standalone scanned PNG enters OCR-capable image preview and can be transcribed',async({page})=>{
+  await page.setContent('<div style="width:700px;height:160px;background:white;color:black;font:50px Arial">Lecture IMAGE</div>');
+  const png=await page.locator('div').screenshot({type:'png'});
+  await page.goto('/checker');
+  await page.getByLabel('Automatically recognize scanned pages (OCR)').uncheck();
+  await page.locator('input[type=file]').setInputFiles({name:'scan.png',mimeType:'image/png',buffer:png});
+  await expect(page.getByRole('heading',{name:'scan.png'})).toBeVisible();
+  await expect(page.getByRole('img',{name:'Original scanned image supplied for text recognition'})).toBeVisible();
+  await page.getByRole('tab',{name:'Edit text'}).click();
+  await page.getByLabel('Add recovered page text').fill('Accurately transcribed lecture image');
+  await page.getByRole('button',{name:/Add text to reading copy/}).click();
+  await expect(page.getByLabel('Extracted text').first()).toHaveValue('Accurately transcribed lecture image');
+});
+test('HTML import ignores executable markup and exports escaped semantic reading content',async({page})=>{
+  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'course.html',mimeType:'text/html',
+    buffer:Buffer.from('<html><body><main><h2>Course accessibility</h2><p>Read carefully and learn.</p><script>throw Error("INJECTED")</script></main></body></html>'),
+  });
+  await expect(page.getByRole('heading',{name:'course.html'})).toBeVisible();
+  await expect(page.getByRole('region',{name:/Imported source content/})).toContainText('Course accessibility');
+  const pending=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export HTML'}).click();
+  const content=await readFile(await (await pending).path(),'utf8');
+  expect(content).toContain('<h2>Course accessibility</h2>');
+  expect(content).not.toContain('INJECTED');
+  expect(errors).toEqual([]);
+});
+test('plain TXT, RTF and TSV are treated as readable documents, not PDFs',async({page})=>{
+  for(const entry of [
+    {name:'notes.txt',mime:'text/plain',value:'Classroom accessibility guidance'},
+    {name:'chapter.rtf',mime:'application/rtf',value:'{\\rtf1\\ansi Inclusive\\par teaching text}'},
+    {name:'attendance.tsv',mime:'text/tab-separated-values',value:'Student\tCourse\nMaya\tBiology'},
+  ]){
+    await page.goto('/checker');
+    await page.locator('input[type=file]').setInputFiles({
+      name:entry.name,mimeType:entry.mime,buffer:Buffer.from(entry.value),
+    });
+    await expect(page.getByRole('heading',{name:entry.name})).toBeVisible({timeout:30000});
+    await expect(page.getByRole('region',{name:/Imported source content/})).toBeVisible();
+  }
+});
