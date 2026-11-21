@@ -137,7 +137,9 @@ export async function buildTaggedReadingPdf(
       }
     }
     doc.end();
-    return await stream;
+    const generated=await stream;
+    const {removeOptionalCidSets}=await import('./pdfuaFonts');
+    return await removeOptionalCidSets(generated);
   }catch(e){
     // Do not return a broken or partly generated document.
     try{doc.end();}catch{ /* PDF stream already ended */ }
