@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://courseaccess.example/</loc></url>
-  <url><loc>https://courseaccess.example/checker</loc></url>
-  <url><loc>https://courseaccess.example/pricing</loc></url>
-  <url><loc>https://courseaccess.example/guides/pdf-accessibility-checker</loc></url>
-  <url><loc>https://courseaccess.example/guides/accessible-lecture-notes</loc></url>
-  <url><loc>https://courseaccess.example/guides/fix-inaccessible-pdfs</loc></url>
-  <url><loc>https://courseaccess.example/guides/math-accessibility</loc></url>
-  <url><loc>https://courseaccess.example/guides/academic-documents</loc></url>
-  <url><loc>https://courseaccess.example/privacy</loc></url>
-  <url><loc>https://courseaccess.example/terms</loc></url>
+  <url><loc>https://courseaccess.minty-12-shar.workers.dev/</loc></url>
+  <url><loc>https://courseaccess.minty-12-shar.workers.dev/checker</loc></url>
+  <url><loc>https://courseaccess.minty-12-shar.workers.dev/pricing</loc></url>
+  <url><loc>https://courseaccess.minty-12-shar.workers.dev/guides/pdf-accessibility-checker</loc></url>
+  <url><loc>https://courseaccess.minty-12-shar.workers.dev/guides/accessible-lecture-notes</loc></url>
+  <url><loc>https://courseaccess.minty-12-shar.workers.dev/guides/fix-inaccessible-pdfs</loc></url>
+  <url><loc>https://courseaccess.minty-12-shar.workers.dev/guides/math-accessibility</loc></url>
+  <url><loc>https://courseaccess.minty-12-shar.workers.dev/guides/academic-documents</loc></url>
+  <url><loc>https://courseaccess.minty-12-shar.workers.dev/privacy</loc></url>
+  <url><loc>https://courseaccess.minty-12-shar.workers.dev/terms</loc></url>
 </urlset>
