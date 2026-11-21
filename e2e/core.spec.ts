@@ -126,4 +126,18 @@ test('actual image-only PDF automatically runs OCR and recovers page text',async
   await expect(page.getByText('OCR text recovered').first()).toBeVisible();
   await page.getByRole('tab',{name:'Edit text'}).click();
   await expect(page.getByLabel('Extracted text').first()).toHaveValue(/SCIENCE/i);
+  const downloadWait=page.waitForEvent('download');
+  await page.getByRole('button',{name:/Download tagged PDF/}).click();
+  const exported=await downloadWait;
+  expect(exported.suggestedFilename()).toBe('image-scan-tagged-reading.pdf');
+  const {readFile}=await import('node:fs/promises');
+  const bytes=await readFile(await exported.path());
+  expect(bytes.toString('latin1')).toContain('/StructTreeRoot');
+  expect(bytes.toString('latin1')).toContain('/MarkInfo');
+  await page.goto('/checker');
+  await page.getByLabel('Automatically recognize scanned pages (OCR)').uncheck();
+  await page.locator('input[type=file]').setInputFiles({name:'ocr-output.pdf',mimeType:'application/pdf',buffer:bytes});
+  await expect(page.getByRole('heading',{name:'ocr-output.pdf'})).toBeVisible({timeout:30000});
+  await page.getByRole('tab',{name:'Edit text'}).click();
+  await expect(page.getByLabel('Extracted text').first()).toHaveValue(/SCIENCE/i);
 });
