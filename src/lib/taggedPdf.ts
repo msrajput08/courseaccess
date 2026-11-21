@@ -46,7 +46,7 @@ export async function buildTaggedReadingPdf(
   const PDFDocument=(pdfModule as unknown as {PDFDocument?:unknown;default:unknown}).PDFDocument ?? pdfModule.default;
   const PdfCtor=PDFDocument as new (options:Record<string,unknown>)=>Doc;
   const doc=new PdfCtor({
-    pdfVersion:'1.7',tagged:true,lang:language,displayTitle:true,autoFirstPage:false,
+    pdfVersion:'1.7',tagged:true,lang:language,displayTitle:true,autoFirstPage:false,font:null,
     margins:{top:55,bottom:55,left:60,right:60},info:{
       Title:inspection.name.replace(/\.pdf$/i,'')+' — structured reading copy',
       Author:'CourseAccess',

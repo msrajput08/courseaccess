@@ -24,3 +24,6 @@
 .ocr-evidence{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;background:#edf5eb;padding:14px 20px;color:#26543e;border-top:1px solid #d8e6d8;font-size:11px;line-height:1.5}
 .ocr-evidence span{color:#405d4a}
 @media(max-width:740px){.ocr-options{display:grid;grid-template-columns:1fr;padding:16px}.workspace-actions{flex-wrap:wrap}.workspace-actions .button{min-width:calc(50% - 10px);justify-content:center}.workspace-actions .button:last-child{min-width:100%}}
+
+/* Contrast remains strong even during the introductory motion transition. */
+.sample-result small{color:#243e31}.sample-bottom{color:#284334}
