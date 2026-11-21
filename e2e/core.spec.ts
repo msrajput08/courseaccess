@@ -124,6 +124,8 @@ test('actual image-only PDF automatically runs OCR and recovers page text',async
   });
   await expect(page.getByRole('heading',{name:'image-scan.pdf'})).toBeVisible({timeout:150000});
   await expect(page.getByText('OCR text recovered').first()).toBeVisible();
+  await expect(page.locator('.preview-status')).toHaveCount(0);
+  const sourceVisual=await page.locator('.pdf-canvas').screenshot();
   await page.getByRole('tab',{name:'Edit text'}).click();
   await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
   // Build an additional original-layout OCR copy (the existing page artwork
@@ -152,6 +154,9 @@ test('actual image-only PDF automatically runs OCR and recovers page text',async
   await page.getByLabel('Automatically recognize scanned pages (OCR)').uncheck();
   await page.locator('input[type=file]').setInputFiles({name:'original-look-searchable.pdf',mimeType:'application/pdf',buffer:searchableBytes});
   await expect(page.getByRole('heading',{name:'original-look-searchable.pdf'})).toBeVisible({timeout:30000});
+  await expect(page.locator('.preview-status')).toHaveCount(0);
+  const searchableVisual=await page.locator('.pdf-canvas').screenshot();
+  expect(searchableVisual.equals(sourceVisual)).toBe(true);
   await page.getByRole('tab',{name:'Edit text'}).click();
   await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
   await expect(page.getByText('No extractable page text')).toHaveCount(0);
