@@ -54,6 +54,10 @@ jobs:
 
       # Independent, release-blocking PDF/UA-1 checks must complete before
       # publishing to Cloudflare; a green tag-presence test is insufficient.
+      - name: Test strict PDF/UA release-gate parser
+        if: steps.credentials.outputs.ready == 'true'
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+
       - name: Install Chromium for the PDF/UA release gate
         if: steps.credentials.outputs.ready == 'true'
         run: npx playwright install --with-deps chromium
