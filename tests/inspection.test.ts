@@ -31,6 +31,21 @@ describe('evidence-based inspection', () => {
     const findings = detectFindings(page({structureTree:false}));
     expect(findings.find(f=>f.category==='structure')?.kind).toBe('potential');
   });
+  it('proposes headings from clearly larger text but not from plain uppercase or punctuation', () => {
+    const evidence = page({ lines: ['Cell Biology', 'Lecture content paragraph.', 'AN ALL-CAPS LABEL'],
+      lineSizes: [21, 11, 11], sizes: [21, ...Array(9).fill(11)] });
+    const blocks = buildInspection('chapter.pdf', 100, [evidence]).pages[0].blocks;
+    expect(blocks.map((b) => b.kind)).toEqual(['heading', 'paragraph', 'paragraph']);
+  });
+  it('groups detected bullet items into one actual semantic list', () => {
+    const evidence = page({ lines: ['Topics', '• Mitosis', '- Meiosis', 'End of topic.'],
+      lineSizes: [19, 11, 11, 11], sizes: [19, ...Array(12).fill(11)] });
+    const report = buildInspection('list.pdf', 100, [evidence]);
+    expect(report.pages[0].blocks.map((b) => b.kind)).toEqual(['heading','list','list','paragraph']);
+    const html = semanticHtml(report, report.pages[0].blocks);
+    expect(html).toContain('<ul>\n<li>Mitosis</li>\n<li>Meiosis</li>\n</ul>');
+    expect(html).not.toContain('<ul><li>Mitosis</li></ul>');
+  });
   it('constructs ordered pages and editable draft blocks', () => {
     const report = buildInspection('example.pdf',123,[page(),page({number:2,lines:[],textItems:0})]);
     expect(report.pageCount).toBe(2);

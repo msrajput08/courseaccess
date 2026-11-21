@@ -6,6 +6,7 @@ export interface PageEvidence {
   height: number;
   lines: string[];
   sizes: number[];
+  lineSizes?: number[];
   textItems: number;
   imagePaintCount: number;
   structureTree: boolean | null;
@@ -50,15 +51,35 @@ export function detectFindings(page: PageEvidence): Finding[] {
   }
   return result;
 }
+/**
+ * Propose semantic blocks from actual PDF text and visual text sizing.
+ * A larger font only suggests a heading when the evidence is strong; users
+ * can change every role before export. We never claim to recover PDF tags.
+ */
 export function createBlocks(page: PageEvidence): EditableBlock[] {
-  const lines = page.lines.map((s) => s.trim()).filter(Boolean);
-  if (!lines.length) return [];
-  return lines.slice(0, 400).map((text, i) => ({
-    id: 'p' + page.number + '-b' + i,
-    page: page.number,
-    kind: 'paragraph',
-    text,
-  }));
+  const validSizes = page.sizes.filter((n) => Number.isFinite(n) && n > 0 && n < 250).sort((a, b) => a - b);
+  const baseline = validSizes.length ? validSizes[Math.floor(validSizes.length / 2)] : 0;
+  const lines = page.lines.map((line, i) => ({ text: line.trim(), size: page.lineSizes?.[i] || 0 })).filter((line) => line.text);
+  return lines.slice(0, 400).map(({ text, size }, i) => {
+    const bullet = /^(?:[•●◦▪‣]|[-*])\s+/.test(text);
+    const heading = !bullet && baseline >= 7 && size >= Math.max(14, baseline * 1.4) &&
+      text.length <= 100 && !/[.!?;:,]$/.test(text);
+    return {
+      id: 'p' + page.number + '-b' + i,
+      page: page.number,
+      kind: bullet ? 'list' : heading ? 'heading' : 'paragraph',
+      text: bullet ? text.replace(/^(?:[•●◦▪‣]|[-*])\s+/, '') : text,
+    };
+  });
+}
+
+export function summarizeAutomation(report: Inspection) {
+  const proposedHeadings = report.pages.flatMap((p) => p.blocks).filter((b) => b.kind === 'heading').length;
+  const proposedLists = report.pages.flatMap((p) => p.blocks).filter((b) => b.kind === 'list').length;
+  const textPages = report.pages.filter((p) => p.text.trim().length > 0).length;
+  const missingTextPages = report.pages.filter((p) => !p.text.trim()).map((p) => p.number);
+  const focusedPages = [...new Set(report.findings.filter((f) => f.severity === 'high' || f.kind === 'manual').map((f) => f.page))];
+  return { proposedHeadings, proposedLists, textPages, missingTextPages, focusedPages };
 }
 export function buildInspection(name: string, size: number, pages: PageEvidence[]): Inspection {
   const inspectedPages: PageInspection[] = pages.map((p) => ({
