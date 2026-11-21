@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run test && npm run build",
     "test:e2e": "playwright test",
+    "test:e2e:live": "playwright test --config=playwright.live.config.ts",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {

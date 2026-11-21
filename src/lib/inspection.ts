@@ -6,8 +6,10 @@ export interface PageEvidence {
   height: number;
   lines: string[];
   sizes: number[];
+  lineSizes?: number[];
   textItems: number;
   imagePaintCount: number;
+  linkAnnotationCount?: number;
   structureTree: boolean | null;
 }
 export const INITIAL_LIMITATIONS = [
@@ -39,6 +41,9 @@ export function detectFindings(page: PageEvidence): Finding[] {
   if (page.structureTree === false && text.length > 0) {
     add('potential', 'medium', 'structure', 'Structure tree not exposed', 'PDF.js did not expose a structure tree for this page. This alone does not establish that the PDF is untagged.', 'Use a dedicated PDF accessibility validator to inspect document tags, headings, lists and reading order.');
   }
+  if (page.linkAnnotationCount === 0 && /(?:https?:\/\/|www\.)[^\s]+/i.test(text)) {
+    add('potential','medium','structure','Visible website address may not be clickable','A visible web address was found in the extracted text, but PDF.js exposed no clickable link annotations on this page.','Use the generated HTML, which turns recognized web addresses into hyperlinks, or add an actual hyperlink in the PDF source.');
+  }
   if (page.imagePaintCount > 0) {
     add('manual', 'review', 'visual', 'Review figure descriptions', page.imagePaintCount + ' image drawing operation(s) were detected. The presence or quality of alternative text cannot be determined here.', 'Check every meaningful figure for an accurate description and mark decorative images appropriately.');
   }
@@ -50,15 +55,35 @@ export function detectFindings(page: PageEvidence): Finding[] {
   }
   return result;
 }
+/**
+ * Propose semantic blocks from actual PDF text and visual text sizing.
+ * A larger font only suggests a heading when the evidence is strong; users
+ * can change every role before export. We never claim to recover PDF tags.
+ */
 export function createBlocks(page: PageEvidence): EditableBlock[] {
-  const lines = page.lines.map((s) => s.trim()).filter(Boolean);
-  if (!lines.length) return [];
-  return lines.slice(0, 400).map((text, i) => ({
-    id: 'p' + page.number + '-b' + i,
-    page: page.number,
-    kind: 'paragraph',
-    text,
-  }));
+  const validSizes = page.sizes.filter((n) => Number.isFinite(n) && n > 0 && n < 250).sort((a, b) => a - b);
+  const baseline = validSizes.length ? validSizes[Math.floor(validSizes.length / 2)] : 0;
+  const lines = page.lines.map((line, i) => ({ text: line.trim(), size: page.lineSizes?.[i] || 0 })).filter((line) => line.text);
+  return lines.slice(0, 400).map(({ text, size }, i) => {
+    const bullet = /^(?:[•●◦▪‣]|[-*])\s+/.test(text);
+    const heading = !bullet && baseline >= 7 && size >= Math.max(14, baseline * 1.4) &&
+      text.length <= 100 && !/[.!?;:,]$/.test(text);
+    return {
+      id: 'p' + page.number + '-b' + i,
+      page: page.number,
+      kind: bullet ? 'list' : heading ? 'heading' : 'paragraph',
+      text: bullet ? text.replace(/^(?:[•●◦▪‣]|[-*])\s+/, '') : text,
+    };
+  });
+}
+
+export function summarizeAutomation(report: Inspection) {
+  const proposedHeadings = report.pages.flatMap((p) => p.blocks).filter((b) => b.kind === 'heading').length;
+  const proposedLists = report.pages.flatMap((p) => p.blocks).filter((b) => b.kind === 'list').length;
+  const textPages = report.pages.filter((p) => p.text.trim().length > 0).length;
+  const missingTextPages = report.pages.filter((p) => !p.text.trim()).map((p) => p.number);
+  const focusedPages = [...new Set(report.findings.filter((f) => f.severity === 'high' || f.kind === 'manual').map((f) => f.page))];
+  return { proposedHeadings, proposedLists, textPages, missingTextPages, focusedPages };
 }
 export function buildInspection(name: string, size: number, pages: PageEvidence[]): Inspection {
   const inspectedPages: PageInspection[] = pages.map((p) => ({
@@ -68,6 +93,7 @@ export function buildInspection(name: string, size: number, pages: PageEvidence[
     text: p.lines.join('\n'),
     textItemCount: p.textItems,
     imagePaintCount: p.imagePaintCount,
+    linkAnnotationCount: p.linkAnnotationCount,
     hasStructureTree: p.structureTree,
     blocks: createBlocks(p),
   }));

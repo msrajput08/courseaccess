@@ -27,27 +27,29 @@ export async function inspectPdf(file: File, progress: (value: number) => void):
       const page = await pdf.getPage(p);
       const viewport = page.getViewport({ scale: 1 });
       const content = await page.getTextContent();
-      const rows: { y: number; x: number; value: string }[] = [];
+      const rows: { y: number; x: number; value: string; size: number }[] = [];
       const sizes: number[] = [];
       for (const item of content.items) {
         if (!('str' in item) || !item.str.trim()) continue;
         const y = item.transform[5];
         const x = item.transform[4];
-        rows.push({ y, x, value: item.str });
         const size = Math.hypot(item.transform[2], item.transform[3]);
+        rows.push({ y, x, value: item.str, size });
         if (size > 0) sizes.push(size);
       }
       // Preserve PDF.js extraction order rather than inferring a definitive logical reading order.
       const lines: string[] = [];
-      let current = '', prevY: number | undefined;
+      const lineSizes: number[] = [];
+      let current = '', currentSize = 0, prevY: number | undefined;
       for (const row of rows) {
         if (prevY !== undefined && Math.abs(prevY - row.y) > 3 && current.trim()) {
-          lines.push(current.trim()); current = '';
+          lines.push(current.trim()); lineSizes.push(currentSize); current = ''; currentSize = 0;
         }
         current += (current ? ' ' : '') + row.value;
+        currentSize = Math.max(currentSize, row.size);
         prevY = row.y;
       }
-      if (current.trim()) lines.push(current.trim());
+      if (current.trim()) { lines.push(current.trim()); lineSizes.push(currentSize); }
       const ops = await page.getOperatorList();
       const imageCodes = new Set<number>([
         pdfjs.OPS.paintImageXObject, pdfjs.OPS.paintInlineImageXObject,
@@ -55,10 +57,12 @@ export async function inspectPdf(file: File, progress: (value: number) => void):
         pdfjs.OPS.paintImageMaskXObject, pdfjs.OPS.paintImageMaskXObjectRepeat,
       ]);
       const imagePaintCount = ops.fnArray.filter((op) => imageCodes.has(op)).length;
+      let linkAnnotationCount: number | undefined;
+      try { linkAnnotationCount = (await page.getAnnotations({intent:'display'})).filter((annotation) => annotation.subtype === 'Link').length; } catch { linkAnnotationCount = undefined; }
       let structureTree: boolean | null = null;
       try { structureTree = !!(await page.getStructTree()); } catch { structureTree = null; }
       pages.push({ number: p, width: viewport.width, height: viewport.height,
-        lines, sizes, textItems: rows.length, imagePaintCount, structureTree });
+        lines, sizes, lineSizes, textItems: rows.length, imagePaintCount, linkAnnotationCount, structureTree });
       page.cleanup();
       progress(Math.round((p / pdf.numPages) * 100));
     }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildInspection, detectFindings, type PageEvidence } from '../src/lib/inspection';
-import { escapeHtml, safeStem, semanticHtml } from '../src/lib/export';
+import { escapeHtml, linkifyText, safeStem, semanticHtml } from '../src/lib/export';
 import { validatePdf } from '../src/lib/pdf';
 import { PRODUCT } from '../src/config';
 function page(patch: Partial<PageEvidence> = {}): PageEvidence {
@@ -22,6 +22,18 @@ describe('evidence-based inspection', () => {
     expect(findings.some(f=>f.title==='Possible image-only page'&&f.kind==='potential')).toBe(true);
     expect(findings.some(f=>f.category==='visual'&&f.kind==='manual')).toBe(true);
   });
+  it('only warns about noninteractive visible URLs when link annotations were actually checked', () => {
+    const f = detectFindings(page({lines:['Visit https://example.org/lecture'],linkAnnotationCount:0}));
+    expect(f.some(x=>x.title==='Visible website address may not be clickable')).toBe(true);
+    const linked=detectFindings(page({lines:['Visit https://example.org/lecture'],linkAnnotationCount:1}));
+    expect(linked.some(x=>x.title==='Visible website address may not be clickable')).toBe(false);
+  });
+  it('safely turns visible URLs into interactive links in HTML drafts', () => {
+    expect(linkifyText('Visit https://example.org/path.')).toContain('<a href="https://example.org/path"');
+    expect(linkifyText('Try www.example.org,')).toContain('<a href="https://www.example.org/"');
+    expect(linkifyText('<script>javascript:alert(1)</script>')).toContain('&lt;script&gt;');
+    expect(linkifyText('javascript:alert(1)')).not.toContain('<a');
+  });
   it('marks math and figures for manual rather than claimed automatic repair', () => {
     const findings = detectFindings(page({lines:['Equation 3 and Figure 2 illustrate the result.']}));
     expect(findings.some(f=>f.category==='stem'&&f.kind==='manual')).toBe(true);
@@ -30,6 +42,21 @@ describe('evidence-based inspection', () => {
   it('treats missing exposed structure tree as potential, not proof', () => {
     const findings = detectFindings(page({structureTree:false}));
     expect(findings.find(f=>f.category==='structure')?.kind).toBe('potential');
+  });
+  it('proposes headings from clearly larger text but not from plain uppercase or punctuation', () => {
+    const evidence = page({ lines: ['Cell Biology', 'Lecture content paragraph.', 'AN ALL-CAPS LABEL'],
+      lineSizes: [21, 11, 11], sizes: [21, ...Array(9).fill(11)] });
+    const blocks = buildInspection('chapter.pdf', 100, [evidence]).pages[0].blocks;
+    expect(blocks.map((b) => b.kind)).toEqual(['heading', 'paragraph', 'paragraph']);
+  });
+  it('groups detected bullet items into one actual semantic list', () => {
+    const evidence = page({ lines: ['Topics', '• Mitosis', '- Meiosis', 'End of topic.'],
+      lineSizes: [19, 11, 11, 11], sizes: [19, ...Array(12).fill(11)] });
+    const report = buildInspection('list.pdf', 100, [evidence]);
+    expect(report.pages[0].blocks.map((b) => b.kind)).toEqual(['heading','list','list','paragraph']);
+    const html = semanticHtml(report, report.pages[0].blocks);
+    expect(html).toContain('<ul>\n<li>Mitosis</li>\n<li>Meiosis</li>\n</ul>');
+    expect(html).not.toContain('<ul><li>Mitosis</li></ul>');
   });
   it('constructs ordered pages and editable draft blocks', () => {
     const report = buildInspection('example.pdf',123,[page(),page({number:2,lines:[],textItems:0})]);
@@ -49,7 +76,7 @@ describe('safe reviewed export', () => {
     expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
     expect(html).toContain('&lt;script&gt;bad()&lt;/script&gt;');
     expect(html).not.toContain('<script>');
-    expect(html).toContain('image not included');
+    expect(html).toContain('image not reproduced');
   });
   it('normalizes downloaded filenames', () => {
     expect(safeStem('Biology / lecture.pdf')).toBe('Biology-lecture');

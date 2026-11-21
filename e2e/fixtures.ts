@@ -40,3 +40,30 @@ export function makeImageOnlyPdf():Buffer {
   pdf+='trailer\n<< /Size '+(objects.length+1)+' /Root 1 0 R >>\nstartxref\n'+start+'\n%%EOF';
   return Buffer.from(pdf,'latin1');
 }
+
+
+/** A tiny actual PDF with differently sized text and explicit bullet lines. */
+export function makeStyledPdf(): Buffer {
+  const drawing = [
+    'BT /F1 24 Tf 65 740 Td (Cell Biology) Tj ET',
+    'BT /F1 11 Tf 65 705 Td (Introduction to cell structures.) Tj ET',
+    'BT /F1 11 Tf 65 675 Td (- Mitosis) Tj ET',
+    'BT /F1 11 Tf 65 652 Td (- Meiosis) Tj ET',
+    'BT /F1 11 Tf 65 625 Td (Lecture summary and next steps.) Tj ET',
+  ].join('\n');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [4 0 R] /Count 1 >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>',
+    '<< /Length '+Buffer.byteLength(drawing,'latin1')+' >>\nstream\n'+drawing+'\nendstream',
+  ];
+  let pdf='%PDF-1.4\n';
+  const offsets=[0];
+  for(let i=0;i<objects.length;i++){offsets.push(Buffer.byteLength(pdf,'latin1'));pdf+=(i+1)+' 0 obj\n'+objects[i]+'\nendobj\n';}
+  const start=Buffer.byteLength(pdf,'latin1');
+  pdf+='xref\n0 '+(objects.length+1)+'\n0000000000 65535 f \n';
+  for(const offset of offsets.slice(1))pdf+=String(offset).padStart(10,'0')+' 00000 n \n';
+  pdf+='trailer\n<< /Size '+(objects.length+1)+' /Root 1 0 R >>\nstartxref\n'+start+'\n%%EOF';
+  return Buffer.from(pdf,'latin1');
+}
