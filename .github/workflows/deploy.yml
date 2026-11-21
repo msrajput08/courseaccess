@@ -128,6 +128,12 @@ jobs:
           echo "Verified deployment: $url" >> "$GITHUB_STEP_SUMMARY"
           echo "Checker route, health API and sitemap responded successfully." >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Verify deployed HTML points to real JavaScript and CSS
+        if: steps.credentials.outputs.ready == 'true'
+        env:
+          DEPLOYMENT_URL: ${{ steps.publish.outputs.deployment-url }}
+        run: node scripts/verify-deployment-assets.mjs "$DEPLOYMENT_URL"
+
       - name: Install browser for live product tests
         if: steps.credentials.outputs.ready == 'true'
         run: npx playwright install --with-deps chromium
