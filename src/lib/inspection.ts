@@ -17,7 +17,7 @@ export const INITIAL_LIMITATIONS = [
   'This is an inspection aid, not a PDF/UA or WCAG certification.',
   'PDF.js text extraction does not reliably establish logical reading order, alt-text completeness, table semantics or full tagging conformance.',
   'Math, figures, charts and complex layouts need a human comparison with the source PDF.',
-  'The semantic HTML export is a reviewable starting point, not an automatically repaired copy of the source PDF.',
+  'Generated HTML and tagged PDF are separate reading copies, not in-place tagging repair of the original PDF. Complex visual semantics may be missing.',
 ];
 export function detectFindings(page: PageEvidence): Finding[] {
   const result: Finding[] = [];

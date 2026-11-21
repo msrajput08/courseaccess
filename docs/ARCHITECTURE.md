@@ -37,3 +37,7 @@ An HTML export uses h2 page headings and user-selectable h3, paragraphs, quotes 
 6. Add consent-gated AI providers and human-approval records. Validate DOCX/PPTX and STEM remediation separately.
 
 The current free checker deliberately avoids an insecure imitation of authentication or billing.
+
+### Offline-first remediation additions
+
+`src/lib/ocr.ts` wraps a lazily loaded browser Tesseract worker used only on image-backed pages with no extracted text. `src/lib/taggedPdf.ts` generates a new tagged reading PDF using browser PDFKit and bundled embedded fonts; no original PDF alteration, server processing or paid provider. The new reading PDF must not be represented as a complete repair of arbitrary original PDF structures.
