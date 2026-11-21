@@ -125,7 +125,7 @@ test('actual image-only PDF automatically runs OCR and recovers page text',async
   await expect(page.getByRole('heading',{name:'image-scan.pdf'})).toBeVisible({timeout:150000});
   await expect(page.getByText('OCR text recovered').first()).toBeVisible();
   await page.getByRole('tab',{name:'Edit text'}).click();
-  await expect(page.getByLabel('Extracted text').first()).toHaveValue(/SCIENCE/i);
+  await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
   const downloadWait=page.waitForEvent('download');
   await page.getByRole('button',{name:/Download tagged PDF/}).click();
   const exported=await downloadWait;
