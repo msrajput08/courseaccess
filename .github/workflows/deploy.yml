@@ -77,3 +77,21 @@ jobs:
           curl --fail --silent --show-error --retry 4 --retry-delay 2 "$url/sitemap.xml" | grep -q '<urlset'
           echo "Verified deployment: $url" >> "$GITHUB_STEP_SUMMARY"
           echo "Checker route, health API and sitemap responded successfully." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install browser for live product tests
+        if: steps.credentials.outputs.ready == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Exercise the real deployed site on desktop and mobile
+        if: steps.credentials.outputs.ready == 'true'
+        env:
+          COURSEACCESS_URL: ${{ steps.publish.outputs.deployment-url }}
+        run: npm run test:e2e:live
+
+      - name: Upload live browser audit screenshots and traces
+        if: always() && steps.credentials.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-browser-audit
+          path: test-results/live/
+          if-no-files-found: ignore

@@ -1,5 +1,5 @@
 import {test,expect} from '@playwright/test';
-import {makePdf,makeImageOnlyPdf} from './fixtures';
+import {makePdf,makeImageOnlyPdf,makeStyledPdf} from './fixtures';
 test('marketing, navigation and pricing clearly distinguish planned features',async({page},testInfo)=>{
   await page.goto('/');
   await page.screenshot({path:'test-results/home-'+testInfo.project.name+'.png',fullPage:true});
@@ -60,4 +60,30 @@ test('optional saved metadata can be viewed and deleted without storing document
   await expect(page.getByText('private-course.pdf')).toBeVisible();
   await page.getByRole('button',{name:/Delete all local summaries/}).click();
   await expect(page.getByText("There's no saved document history yet.")).toBeVisible();
+});
+
+test('missing selectable text can be recovered inside the generated HTML draft',async({page})=>{
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({name:'two-pages.pdf',mimeType:'application/pdf',buffer:makePdf(['Lecture notes with searchable content.',''])});
+  await expect(page.getByRole('heading',{name:'two-pages.pdf'})).toBeVisible({timeout:30000});
+  await expect(page.getByRole('heading',{name:'Reading draft prepared.'})).toBeVisible();
+  await page.getByRole('button',{name:/Page 02/i}).click();
+  await page.getByRole('tab',{name:'Edit text'}).click();
+  await page.getByLabel('Add recovered page text').fill('Recovered chapter text for students.');
+  await page.getByRole('button',{name:/Add text to HTML draft/i}).click();
+  await expect(page.getByLabel('Extracted text').first()).toHaveValue('Recovered chapter text for students.');
+  const wait=page.waitForEvent('download');
+  await page.getByRole('button',{name:/Export HTML/}).click();
+  const file=await wait;
+  expect(file.suggestedFilename()).toBe('two-pages-reviewed.html');
+});
+test('proposes semantic heading and list elements from real PDF formatting',async({page})=>{
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({name:'structured.pdf',mimeType:'application/pdf',buffer:makeStyledPdf()});
+  await expect(page.getByRole('heading',{name:'structured.pdf'})).toBeVisible({timeout:30000});
+  await expect(page.getByText(/proposed 1 heading/)).toBeVisible();
+  await expect(page.getByText(/2 list items/)).toBeVisible();
+  await page.getByRole('tab',{name:'Edit text'}).click();
+  await expect(page.getByLabel('Semantic role').first()).toHaveValue('heading');
+  await expect(page.getByLabel('Semantic role').nth(2)).toHaveValue('list');
 });
