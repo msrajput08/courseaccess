@@ -30,3 +30,9 @@ If OCR yields no text, the user can add recovered text manually. If PDF font or 
 OCR is CPU and RAM intensive on the user's device. The app processes pages sequentially, limits render pixel count and reuses one Tesseract worker. Browser tab memory, model-download failures and large scanned documents can still exceed local resource capacity. Document bytes do not leave the browser as part of this workflow. Language models/fonts may be fetched as public static resources; never send private page images to a third party without separate consent.
 
 External technical references: Tesseract.js documentation, PDFKit accessibility guide, W3C tagged PDF accessibility guidance.
+
+## Phase 2: visually preserved searchable OCR copies
+
+A separate, lazy-loaded browser exporter uses pdf-lib and fontkit to load the original page drawing streams and insert fully transparent, positioned recognized words. Each word's OCR pixel bounding box is normalized, checked and mapped to the unrotated source page crop box. The result retains original page artwork; PDF.js confirms the recognized text becomes selectable on the rewritten copy. This option intentionally rejects existing structure trees, PDF forms, signed documents, rotated scanned pages and scans without geometry. It is a **searchable visual copy**, not a repaired tagged or PDF/UA PDF.
+
+When users want true semantic reading order they should choose the existing *tagged reading copy* instead. That export uses corrected editable blocks; the visual copy necessarily uses initial OCR positions and words. The original file is never overwritten. Local and live browser tests exercise scanning a JPEG image-only PDF, downloading both output formats and reopening them to verify selectable text.

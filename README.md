@@ -59,3 +59,9 @@ The checker enables **automatic OCR** by default for pages with embedded images 
 Use **Download tagged PDF** in the workspace to generate a new reading copy with an actual PDF logical structure tree, semantic H1/H2/H3/P/L tags, document language and embedded Noto Sans fonts. It reflects your edited blocks and approved figure descriptions. The output reflows text and does not preserve/retag every figure, form, annotation, complex table or mathematical layout in the original PDF. Formal PDF/UA claims require validation (e.g. PAC/veraPDF plus assistive technology). The original source stays unchanged.
 
 See [OCR and tagged reading export engineering notes](docs/OCR_TAGGING.md) for accuracy limitations and test protocol.
+
+## Phase 2: original-layout searchable PDF
+
+For image-only scanned PDFs, CourseAccess can now produce a **third download**: *Keep layout + searchable OCR*. It loads a copy of the original PDF, retains the page images and places invisible recognized words at their scanned positions, enabling PDF search and text selection without reflowing the visible pages. This is deliberately separate from the existing **new tagged reading PDF**, which provides semantic headings and lists but reflows the page layout. The source file is never overwritten.
+
+The searchable source-layout PDF **is not a fully accessible or PDF/UA compliant PDF**. It contains an OCR text layer, not repaired semantic tags. Its positioned OCR is taken from the automatic recognition results; manual text edits affect the tagged reading copy and HTML, not the original-layout OCR layer. Rotated, signed, form, tagged or unsupported PDFs are refused rather than risking loss of semantics or incorrect word placement. Runtime download only appears when valid OCR word locations exist. See docs/OCR_TAGGING.md.

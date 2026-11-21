@@ -126,6 +126,14 @@ test('actual image-only PDF automatically runs OCR and recovers page text',async
   await expect(page.getByText('OCR text recovered').first()).toBeVisible();
   await page.getByRole('tab',{name:'Edit text'}).click();
   await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
+  // Build an additional original-layout OCR copy (the existing page artwork
+  // remains visible, while positioned OCR words are selectable).
+  const searchablePending=page.waitForEvent('download');
+  await page.getByRole('button',{name:/Keep layout \+ searchable OCR/}).click();
+  const searchableFile=await searchablePending;
+  expect(searchableFile.suggestedFilename()).toBe('image-scan-searchable-original-layout.pdf');
+  const searchableBytes=await (await import('node:fs/promises')).readFile(await searchableFile.path());
+  expect(searchableBytes.subarray(0,5).toString('latin1')).toBe('%PDF-');
   const downloadWait=page.waitForEvent('download');
   await page.getByRole('button',{name:/Download tagged PDF/}).click();
   const exported=await downloadWait;
@@ -140,4 +148,12 @@ test('actual image-only PDF automatically runs OCR and recovers page text',async
   await expect(page.getByRole('heading',{name:'ocr-output.pdf'})).toBeVisible({timeout:30000});
   await page.getByRole('tab',{name:'Edit text'}).click();
   await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
+  await page.goto('/checker');
+  await page.getByLabel('Automatically recognize scanned pages (OCR)').uncheck();
+  await page.locator('input[type=file]').setInputFiles({name:'original-look-searchable.pdf',mimeType:'application/pdf',buffer:searchableBytes});
+  await expect(page.getByRole('heading',{name:'original-look-searchable.pdf'})).toBeVisible({timeout:30000});
+  await page.getByRole('tab',{name:'Edit text'}).click();
+  await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
+  await expect(page.getByText('No extractable page text')).toHaveCount(0);
 });
+
