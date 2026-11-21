@@ -2,13 +2,14 @@
 
 **Every lesson. Accessible to everyone.**
 
-CourseAccess is a privacy-conscious, educator-first PDF accessibility review product. React + TypeScript + Vite, PDF.js and Cloudflare Workers.
+CourseAccess is a privacy-conscious, educator-first multi-format document accessibility studio. React + TypeScript + Vite, PDF.js and Cloudflare Workers.
 
 ## What works
 
 - Custom responsive educational marketing website, labeled interactive example, free checker, pricing, resources and legal pages.
-- PDF inspection **and automatic image-backed-page OCR** in the browser; no document uploads, account or checkout.
-- File validation: PDF extension and header, maximum 20 MB and 80 pages.
+- Local import of PDF, DOCX, PPTX, XLSX, ODT/ODP/ODS, EPUB, plain text, Markdown, HTML, CSV/TSV, RTF and scanned PNG/JPEG/WebP with no uploads.
+- PDF inspection and OCR on scanned PDFs and standalone images in the browser.
+- File validation: supported extensions, PDF/Office signatures, 20 MB file limit, 64 MB ZIP expansion budget, at most 80 pages/slides/sheets/sections.
 - Text extraction and page-by-page PDF canvas preview; verified observations, potential issues and manual review reminders.
 - Editable semantic text blocks and manually approved separate figure-description notes.
 - Downloadable inspection JSON, semantic HTML, and **new semantically tagged PDF reading copies** generated from extracted or OCR text and user-approved edits. Original PDF bytes are not modified. This is not a PDF/UA conformance certificate.
@@ -71,3 +72,11 @@ The searchable source-layout PDF **is not a fully accessible or PDF/UA compliant
 The browser workspace now supports structured tables (first row becomes real column headings), edited LaTeX converted to native MathML for semantic HTML, equation explanations, configurable heading levels and manual reading-order rearrangement. The same corrected blocks feed the tagged PDF reading-copy generator, which writes Table/TR/TH/TD and Formula structure tags. Page-level approved figure descriptions are kept separate from images not reproduced. A live quality panel performs checks on **the edited content**, flagging empty pages, low OCR confidence, malformed tables, invalid formula syntax, absent spoken math explanations, unreviewed figures and heading-level jumps. JSON evidence can be exported.
 
 The audit is a document-content quality gate, **not PDF/UA certification**. No claim is made that all original content can be safely retagged in place. For accurate PDF/UA validation use an independent verifier such as veraPDF, assistive technology and a representative course-content test corpus. No AI vision provider runs on private page images without user consent.
+
+## Multiformat document import
+
+CourseAccess now processes Word DOCX, PowerPoint PPTX, Excel XLSX, OpenDocument ODT/ODP/ODS, EPUB, TXT, Markdown, HTML, CSV/TSV, RTF, and PNG/JPEG/WebP images in the same remediation studio. Structured source headings, paragraphs, slide titles, tables and worksheet values are extracted locally. OCR runs for scanned PDF pages and standalone images. Users can export a new tagged PDF reading copy, semantic HTML and document QA evidence. The original file is never modified.
+
+The source preview for non-PDF documents is an extracted-content preview, not a claim of pixel-perfect Office rendering. Complex visual diagrams and merged cells require source verification. Legacy binary DOC/PPT/XLS should be saved to current XML Office formats first.
+
+See [Multiformat import](docs/MULTIFORMAT.md) for supported formats and precise boundaries.
