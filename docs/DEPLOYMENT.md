@@ -2,7 +2,7 @@
 
 ## Current status
 
-The CourseAccess app is merged into main, but a GitHub merge is **not** a confirmed live deployment. The repository does not include Cloudflare credentials.
+The initial CourseAccess application was successfully deployed to https://courseaccess.minty-12-shar.workers.dev/ and verified by GitHub Actions run https://github.com/msrajput08/courseaccess/actions/runs/44871520759 (second attempt, 2026-11-21). The smoke test checked the checker route, API health, and sitemap. Future deployments must still independently pass their own checks.
 
 GitHub Actions deployment runs automatically on main pushes or manually via Actions > Deploy CourseAccess to Cloudflare Workers > Run workflow.
 
@@ -15,7 +15,7 @@ In **CourseAccess** GitHub repository > Settings > Secrets and variables > Actio
 
 Never put either value in a source file, issue, PR comment or chat.
 
-Optionally define an Actions repository variable COURSEACCESS_PUBLIC_ORIGIN pointing to your verified production domain. The Vite app uses it to build client canonical links. Do not set this to an invented address.
+Define the Actions repository variable COURSEACCESS_PUBLIC_ORIGIN as https://courseaccess.minty-12-shar.workers.dev (or a future verified custom domain). The Vite app uses it to build client canonical links. Do not set this to an invented address.
 
 Once configured, manually run the workflow once. On future main pushes, it will deploy automatically.
 
