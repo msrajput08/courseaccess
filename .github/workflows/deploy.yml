@@ -52,6 +52,56 @@ jobs:
         env:
           VITE_PUBLIC_ORIGIN: ${{ vars.COURSEACCESS_PUBLIC_ORIGIN }}
 
+      # Independent, release-blocking PDF/UA-1 checks must complete before
+      # publishing to Cloudflare; a green tag-presence test is insufficient.
+      - name: Test strict PDF/UA release-gate parser
+        if: steps.credentials.outputs.ready == 'true'
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+
+      - name: Install Chromium for the PDF/UA release gate
+        if: steps.credentials.outputs.ready == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Generate actual browser-produced PDF/UA release specimens
+        if: steps.credentials.outputs.ready == 'true'
+        run: npx playwright test --config=playwright.pdfua.config.ts
+
+      - name: Install independent Typst reference generator
+        if: steps.credentials.outputs.ready == 'true'
+        uses: typst-community/setup-typst@v4
+
+      - name: Produce independent PDF/UA-1 positive control
+        if: steps.credentials.outputs.ready == 'true'
+        run: |
+          mkdir -p pdfua-artifacts/generated pdfua-artifacts/reports
+          typst compile --pdf-standard ua-1 quality/reference.typ pdfua-artifacts/generated/typst-reference.pdf
+
+      - name: Independently validate PDF/UA with veraPDF before publishing
+        if: steps.credentials.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for sample in typst-reference reading-basic reading-stem; do
+            result=0
+            docker run --rm -v "$PWD/pdfua-artifacts:/data" \
+              verapdf/cli:v1.30.4 \
+              -f ua1 --format xml "/data/generated/$sample.pdf" \
+              > "pdfua-artifacts/reports/$sample.xml" \
+              2> "pdfua-artifacts/reports/$sample.stderr" || result=$?
+            echo "veraPDF exit for $sample: $result (independent XML report checked next)"
+          done
+          python3 scripts/summarize_pdfua.py
+
+      - name: Upload production release PDF/UA evidence
+        if: always() && steps.credentials.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-pdfua-gate-evidence
+          path: |
+            pdfua-artifacts/
+            test-results/pdfua-export/
+          if-no-files-found: warn
+
       - name: Publish Worker and static assets
         if: steps.credentials.outputs.ready == 'true'
         id: publish

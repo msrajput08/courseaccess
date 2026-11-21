@@ -47,7 +47,7 @@ export async function buildTaggedReadingPdf(
   const PDFDocument=(pdfModule as unknown as {PDFDocument?:unknown;default:unknown}).PDFDocument ?? pdfModule.default;
   const PdfCtor=PDFDocument as new (options:Record<string,unknown>)=>Doc;
   const doc=new PdfCtor({
-    pdfVersion:'1.7',tagged:true,lang:language,displayTitle:true,autoFirstPage:false,font:null,
+    pdfVersion:'1.7',subset:'PDF/UA',tagged:true,lang:language,displayTitle:true,autoFirstPage:false,font:null,
     margins:{top:55,bottom:55,left:60,right:60},info:{
       Title:inspection.name.replace(/\.pdf$/i,'')+' — structured reading copy',
       Author:'CourseAccess',
@@ -67,7 +67,7 @@ export async function buildTaggedReadingPdf(
   doc.addStructure(root);
   const isDevanagari=(value:string)=>/[\u0900-\u097F]/.test(value);
   function emit(section:Struct,type:string,text:string,fontSize:number,bold=false) {
-    section.add(doc.struct(type,()=>{
+    section.add(doc.struct(type,type==='TH'?{scope:'Column'}:{},()=>{
       doc.font(isDevanagari(text)?'Devanagari':bold?'Heading':'Reading')
         .fontSize(fontSize).fillColor('#20382d').text(text+' ',{paragraphGap:fontSize*.5,lineGap:2});
     }));
@@ -137,7 +137,9 @@ export async function buildTaggedReadingPdf(
       }
     }
     doc.end();
-    return await stream;
+    const generated=await stream;
+    const {removeOptionalCidSets}=await import('./pdfuaFonts');
+    return await removeOptionalCidSets(generated);
   }catch(e){
     // Do not return a broken or partly generated document.
     try{doc.end();}catch{ /* PDF stream already ended */ }
