@@ -21,7 +21,7 @@ describe('Cloudflare navigation shell cache policy',()=>{
       const response=await worker.fetch(new Request('https://example.workers.dev'+path),env);
       expect(response.status).toBe(200);
       expect(response.headers.get('cache-control')).toMatch(/no-store/);
-      expect(response.headers.get('content-type')).toMatch(/text\\/html/);
+      expect(response.headers.get('content-type')).toContain('text/html');
       expect(await response.text()).toContain('src="/assets/app-123.js"');
       expect(assetCalls).toEqual(['/index.html']);
     }
