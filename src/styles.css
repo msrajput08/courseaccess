@@ -67,3 +67,20 @@
 @media(max-width:460px){.studio-tools .button{flex:1 1 42%}.qa-metrics{grid-template-columns:1fr 1fr}}
 
 .document-language{display:inline-flex;align-items:center;gap:9px;margin-top:11px;font-size:11px;font-weight:700;color:#425e4e}.document-language select{background:#fff;border:1px solid #c6d7c8;border-radius:6px;color:#24513c;padding:8px 11px;font-size:12px}
+
+/* Multiformat document import: semantic source preview for Office, eBooks and text */
+.format-strip{font-size:11px;line-height:1.8;font-weight:650;max-width:650px;margin:16px auto 0;color:#335e4e}
+.source-sheet{padding:24px;background:white;color:#1d352b;min-height:440px;max-height:720px;overflow:auto;box-shadow:0 6px 20px #203c2a10}
+.source-sheet-heading{border-bottom:1px solid #dbe6dc;padding-bottom:15px;margin-bottom:15px;display:flex;flex-direction:column;gap:8px}
+.source-sheet-heading span{font-size:10px;letter-spacing:.11em;font-weight:800;color:#4a6b59}
+.source-sheet-heading strong{font-size:22px;font-family:var(--serif);font-weight:400}
+.source-preview-notice{color:#536f5d;font-size:11px;line-height:1.7;background:#edf5ed;padding:9px 11px}
+.source-preview-content{font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+.source-block h3{font-family:var(--serif);font-size:20px;line-height:1.35;margin:18px 0 8px}
+.source-block p{margin:10px 0}
+.source-block pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;border:1px solid #d8e4db;background:#f8faf7;padding:12px;margin:12px 0}
+.source-block.source-list{margin-left:12px}
+.source-image{display:grid;place-items:center;min-height:340px}
+.source-image img{max-width:100%;height:auto;max-height:650px;object-fit:contain}
+.source-empty{color:#516c5e}
+@media(max-width:720px){.source-sheet{padding:16px;min-height:340px}.format-strip{font-size:10px}}

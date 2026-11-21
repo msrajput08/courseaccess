@@ -9,6 +9,7 @@ export interface SearchablePdfResult {
 
 /** Whether source-layout OCR is safe to offer. The source is copied, not edited. */
 export function searchablePages(report: Inspection): number[] {
+  if(report.sourceFormat&&report.sourceFormat!=='pdf')return [];
   return report.pages.filter(page =>
     page.ocr?.status === 'recovered' && (page.ocr.words?.length ?? 0) > 0 &&
     page.textItemCount === 0 && page.hasStructureTree !== true,
