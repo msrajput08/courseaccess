@@ -84,3 +84,11 @@
 .source-image img{max-width:100%;height:auto;max-height:650px;object-fit:contain}
 .source-empty{color:#516c5e}
 @media(max-width:720px){.source-sheet{padding:16px;min-height:340px}.format-strip{font-size:10px}}
+
+/* Mobile accessibility: ensure all opened navigation links and menu controls
+   have a WCAG 2.2 AA-friendly tap target, not only a clickable text run. */
+@media(max-width:740px){
+  .mobile-menu{display:inline-grid;place-items:center;flex:0 0 44px;width:44px;height:44px;border-radius:8px}
+  .nav.open a{display:flex;align-items:center;min-height:48px;width:100%;padding:12px 18px}
+  .nav.open{gap:5px}
+}
