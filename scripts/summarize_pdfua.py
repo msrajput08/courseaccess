@@ -77,7 +77,8 @@ def main() -> int:
         item = results[name]
         state = "PASS" if item["compliant"] else "FAIL"
         lines.append(f"| {name} | {state} | {item['failedRules']} | {item['failedChecks']} |")
-    lines += ["", "**Diagnostic:** A failed CourseAccess sample is a real detected gap, not hidden success.",
+    lines += ["", "**Release gate:** all actual CourseAccess sample PDFs MUST pass independent PDF/UA-1 validation.",
+              "Passing samples do not imply arbitrary user files or meaningful figure semantics are universally conformant.",
               "Full veraPDF XML and sample PDFs are attached to this workflow.", ""]
     summary = "\n".join(lines)
     (REPORTS / "validation-summary.md").write_text(summary)
@@ -87,6 +88,10 @@ def main() -> int:
             file.write(summary)
     if not results["typst-reference"]["compliant"]:
         print("::error::Independent PDF/UA positive control failed; validator run is untrusted.", file=sys.stderr)
+        return 1
+    failed_samples = [name for name in EXPECTED if name != "typst-reference" and not results[name]["compliant"]]
+    if failed_samples:
+        print("::error::Independent PDF/UA-1 release gate FAILED for " + ", ".join(failed_samples), file=sys.stderr)
         return 1
     return 0
 

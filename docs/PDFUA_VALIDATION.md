@@ -10,7 +10,7 @@ Read the workflow summary, then download artifact "independent-pdfua-evidence" t
 - structured JSON summary;
 - validator stderr logs.
 
-A green workflow means the validator produced parseable evidence and correctly recognized the known-good reference. It DOES NOT mean a CourseAccess PDF is PDF/UA conformant. Only a specific file with the corresponding "isCompliant=true" result passes the rules checked in that profile. Independent manual accessibility assessment remains necessary for meaningful figures, equations, tables and navigation.
+The CI release gate is now **strict**: it fails if the reference positive control fails OR if either actual CourseAccess reading sample has any PDF/UA-1 validation failure. A green workflow establishes that **the specific tested samples** passed the independent automated rule set. It does NOT certify arbitrary user uploads, meaningful figure descriptions, mathematical semantics, or accessibility by every assistive technology. Each new exported file requires its own validation and review.
 
 ## Validate a private document on your own machine
 

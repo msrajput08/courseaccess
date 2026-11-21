@@ -31,4 +31,4 @@ Reference documentation:
 5. Assistive-technology checks and representative academic PDFs before marketing any formal conformance.
 6. A failed PDF/UA result is a product defect to prioritize, not a marketing label to hide.
 
-The next strict conformance gate is only attainable once output PDFs have no failed requirements and pass relevant user-experience checks. Status from automatic checks alone must never be represented as universal accessibility certification.
+The independent PDF/UA-1 sample validation gate is now strict: any generated sample failure blocks CI and production deployment. The browser-produced basic and STEM samples have passed the current veraPDF profile. This is narrower than universal PDF/UA certification: robust coverage still requires larger real-document corpora, screen-reader walkthroughs, figure semantics and tests on arbitrarily complex source documents.
