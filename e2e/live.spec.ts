@@ -35,7 +35,7 @@ test('real deployed checker processes PDF, prepares reading draft and exports', 
   });
   await expect(page.getByRole('heading',{name:'live-proof.pdf'})).toBeVisible({timeout:30000});
   await expect(page.getByRole('heading',{name:'Reading draft prepared.'})).toBeVisible();
-  await expect(page.getByText(/1 page\(s\) need added text/)).toBeVisible();
+  await expect(page.getByText(/1 page\(s\) still need text/)).toBeVisible();
   await page.getByRole('button',{name:/Page 02/i}).click();
   await page.getByRole('tab',{name:'Edit text'}).click();
   await expect(page.getByLabel('Add recovered page text')).toBeVisible();
