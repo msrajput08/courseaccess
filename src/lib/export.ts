@@ -73,3 +73,11 @@ export function downloadReport(report: Inspection, editedBlocks?: EditableBlock[
     ...(reviewedNotes ? { approvedFigureNotes: reviewedNotes } : {}),
   }, null, 2), 'application/json;charset=utf-8');
 }
+
+export function downloadBlob(filename:string,blob:Blob):void {
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=filename;
+  document.body.append(a);a.click();a.remove();
+  window.setTimeout(()=>URL.revokeObjectURL(url),3000);
+}
