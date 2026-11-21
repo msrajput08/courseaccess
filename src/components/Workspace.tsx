@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, ArrowDownToLine, ArrowLeft, ArrowRight, Check, CheckCheck, ClipboardCheck, FileCode2, FileText, Image, Info, LockKeyhole, Save, ShieldCheck } from 'lucide-react';
 import { PRODUCT } from '../config';
 import { summarizeAutomation } from '../lib/inspection';
+import { searchablePages } from '../lib/searchablePdf';
 import { downloadReport, downloadText, downloadBlob, safeStem, semanticHtml } from '../lib/export';
 import { rememberMetadata } from '../lib/history';
 import type { EditableBlock, FindingKind, Inspection } from '../types';
@@ -66,6 +67,8 @@ export default function Workspace({inspection,file,onNew,onSaved}:Props) {
   const tasks=guidedChecks(inspection);
   const [toast,setToast]=useState('');
   const [pdfExporting,setPdfExporting]=useState(false);
+  const [sourceExporting,setSourceExporting]=useState(false);
+  const searchable=searchablePages(inspection);
   const findings=inspection.findings.filter(f=>f.page===page&&(filter==='all'||filter===f.kind));
   const current=inspection.pages[page-1];
   const update=(id:string,patch:Partial<EditableBlock>)=>setBlocks(prev=>prev.map(b=>b.id===id?{...b,...patch}:b));
@@ -90,10 +93,29 @@ export default function Workspace({inspection,file,onNew,onSaved}:Props) {
       setToast(err instanceof Error?'PDF export failed: '+err.message:'Tagged PDF export failed.');
     }finally{setPdfExporting(false);}
   }
+  async function searchablePdf() {
+    if(sourceExporting)return;
+    setSourceExporting(true);
+    setToast('Placing recognized words over scanned pages without changing their appearance…');
+    try{
+      const {buildSearchableSourcePdf}=await import('../lib/searchablePdf');
+      const result=await buildSearchableSourcePdf(file,inspection);
+      downloadBlob(safeStem(inspection.name)+'-searchable-original-layout.pdf',result.pdf);
+      setToast('Searchable visual copy downloaded: '+result.pages+' scanned page(s), '+result.words+' positioned OCR words. This is not a tagged PDF.');
+    }catch(error){
+      setToast(error instanceof Error?'Searchable PDF export failed: '+error.message:'Searchable PDF export failed.');
+    }finally{setSourceExporting(false);}
+  }
   return <main className="workspace shell">
-    <div className="workspace-top"><button className="text-button" onClick={onNew} type="button"><ArrowLeft size={16}/> New inspection</button><div className="workspace-actions"><button className="button button-quiet" type="button" onClick={save}><Save size={16}/> Save metadata</button><button className="button button-quiet" type="button" onClick={()=>downloadReport(inspection,blocks,approved)}><ArrowDownToLine size={16}/> Report JSON</button><button className="button button-quiet" type="button" onClick={html}><FileCode2 size={16}/> Export HTML</button><button className="button button-primary" type="button" disabled={pdfExporting} onClick={()=>void taggedPdf()}><FileText size={16}/>{pdfExporting?'Building PDF…':'Download tagged PDF'}</button></div></div>
+    <div className="workspace-top"><button className="text-button" onClick={onNew} type="button"><ArrowLeft size={16}/> New inspection</button><div className="workspace-actions"><button className="button button-quiet" type="button" onClick={save}><Save size={16}/> Save metadata</button><button className="button button-quiet" type="button" onClick={()=>downloadReport(inspection,blocks,approved)}><ArrowDownToLine size={16}/> Report JSON</button><button className="button button-quiet" type="button" onClick={html}><FileCode2 size={16}/> Export HTML</button><button className="button button-primary" type="button" disabled={pdfExporting} onClick={()=>void taggedPdf()}><FileText size={16}/>{pdfExporting?'Building PDF…':'Download tagged PDF'}</button>{searchable.length>0&&<button type="button" className="button button-secondary" disabled={sourceExporting} onClick={()=>void searchablePdf()}><FileText size={16}/>{sourceExporting?'Building searchable PDF…':'Keep layout + searchable OCR'}</button>}</div></div>
     <div className="workspace-intro"><div><span className="eyebrow">INSPECTION / LOCAL DOCUMENT</span><h1>{inspection.name}</h1><p>Automatic OCR when needed, editable structure, and accessible-first exports—in one workspace.</p></div><span className="private-tag"><LockKeyhole size={15}/> Document stays on this device</span></div>
-    <div className="automation-summary" role="region" aria-label="Automated document preparation"><div><span className="eyebrow">AUTOMATED DOCUMENT PREPARATION</span><h2>Reading draft prepared.</h2><p>Text recovered from <strong>{automation.textPages} of {inspection.pageCount} pages</strong>. The checker proposed <strong>{automation.proposedHeadings} heading{automation.proposedHeadings===1?'':'s'}</strong> and <strong>{automation.proposedLists} list item{automation.proposedLists===1?'':'s'}</strong> using observable text formatting. {automation.missingTextPages.length>0?`${automation.missingTextPages.length} page(s) still need text.`:'No missing-text pages detected.'} {automation.ocrRecoveredPages>0?`${automation.ocrRecoveredPages} scanned page(s) recovered by OCR.`:''} {automation.ocrFailedPages>0?`${automation.ocrFailedPages} page(s) could not be recognized.`:''}</p><small>Suggested structure is editable. Export as semantic HTML or a NEW tagged reading PDF; the original is unchanged.</small></div><button type="button" className="button button-secondary" onClick={()=>{setTab('edit');setPage(automation.missingTextPages[0]||1);}}>Improve draft <ArrowRight size={16}/></button></div>
+    <div className="automation-summary" role="region" aria-label="Automated document preparation"><div><span className="eyebrow">AUTOMATED DOCUMENT PREPARATION</span><h2>Reading draft prepared.</h2><p>Text recovered from <strong>{automation.textPages} of {inspection.pageCount} pages</strong>. The checker proposed <strong>{automation.proposedHeadings} heading{automation.proposedHeadings===1?'':'s'}</strong> and <strong>{automation.proposedLists} list item{automation.proposedLists===1?'':'s'}</strong> using observable text formatting. {automation.missingTextPages.length>0?`${automation.missingTextPages.length} page(s) still need text.`:'No missing-text pages detected.'} {automation.ocrRecoveredPages>0?`${automation.ocrRecoveredPages} scanned page(s) recovered by OCR.`:''} {automation.ocrFailedPages>0?`${automation.ocrFailedPages} page(s) could not be recognized.`:''}</p><small>Choose a semantic tagged reading PDF, HTML, or—when OCR geometry exists—a visual-layout-preserving searchable PDF copy. The original file stays unchanged.</small></div><button type="button" className="button button-secondary" onClick={()=>{setTab('edit');setPage(automation.missingTextPages[0]||1);}}>Improve draft <ArrowRight size={16}/></button></div>
+    {searchable.length>0&&<div className="searchable-banner" role="region" aria-label="Original-layout searchable PDF">
+      <div><span className="eyebrow">NEW · SEARCHABLE SOURCE COPY</span><h2>Keep the design. Recover the words.</h2>
+      <p>{searchable.length} image-based page(s) have positional OCR data. The original page artwork is retained, with an invisible selectable OCR text layer on top. Unlike the tagged reading PDF, this option does not produce a tagged or PDF/UA-conformant PDF.</p>
+      <small>Best for scanned pages. OCR words are from the initial scan: subsequent text edits belong to the tagged reading copy and HTML, not the positioned overlay.</small></div>
+      <button type="button" className="button button-secondary" disabled={sourceExporting} onClick={()=>void searchablePdf()}>{sourceExporting?'Preparing…':'Download searchable copy'} <ArrowRight size={16}/></button>
+    </div>}
     <div className="stats-row"><div><strong>{inspection.pageCount}</strong><span>Pages</span></div><div><strong>{inspection.findings.filter(f=>f.kind==='verified').length}</strong><span>Verified observations</span></div><div><strong>{inspection.findings.filter(f=>f.kind==='potential').length}</strong><span>Potential issues</span></div><div><strong>{inspection.findings.filter(f=>f.kind==='manual').length}</strong><span>Focused follow-ups</span></div><div className="stats-caveat"><Info size={17}/> Not a compliance score</div></div>
     <div className="editor-layout">
       <aside className="editor-rail"><span className="rail-label">DOCUMENT PAGES</span>{inspection.pages.map(p=><button key={p.number} type="button" className={'page-link '+(p.number===page?'selected':'')} aria-current={p.number===page?'page':undefined} onClick={()=>setPage(p.number)}><span>Page {String(p.number).padStart(2,'0')}</span><small>{inspection.findings.filter(f=>f.page===p.number).length}</small></button>)}<div className="rail-note"><ShieldCheck size={21}/><strong>Fix what matters.</strong><p>Jump straight to pages with detected text gaps and layout cues.</p></div></aside>
