@@ -1,4 +1,4 @@
-import type { EditableBlock, Finding, Inspection, PageInspection } from '../types';
+import type { EditableBlock, Finding, Inspection, PageInspection, PageOcr } from '../types';
 
 export interface PageEvidence {
   number: number;
@@ -10,13 +10,14 @@ export interface PageEvidence {
   textItems: number;
   imagePaintCount: number;
   linkAnnotationCount?: number;
+  ocr?: PageOcr;
   structureTree: boolean | null;
 }
 export const INITIAL_LIMITATIONS = [
   'This is an inspection aid, not a PDF/UA or WCAG certification.',
   'PDF.js text extraction does not reliably establish logical reading order, alt-text completeness, table semantics or full tagging conformance.',
   'Math, figures, charts and complex layouts need a human comparison with the source PDF.',
-  'The semantic HTML export is a reviewable starting point, not an automatically repaired copy of the source PDF.',
+  'Generated HTML and tagged PDF are separate reading copies, not in-place tagging repair of the original PDF. Complex visual semantics may be missing.',
 ];
 export function detectFindings(page: PageEvidence): Finding[] {
   const result: Finding[] = [];
@@ -24,11 +25,16 @@ export function detectFindings(page: PageEvidence): Finding[] {
   const add = (kind: Finding['kind'], severity: Finding['severity'], category: Finding['category'], title: string, description: string, recommendation: string) => {
     result.push({ id: 'p' + page.number + '-' + result.length, page: page.number, kind, severity, category, title, description, recommendation });
   };
-  if (page.textItems === 0 || !text) {
-    add('verified', 'high', 'text', 'No extractable page text', 'No readable text items were returned by PDF.js for this page. This does not prove the page is scanned.', 'Check whether this page is an image or contains non-extractable text. If necessary, apply and review OCR in the source document.');
-    if (page.imagePaintCount > 0) {
-      add('potential', 'high', 'visual', 'Possible image-only page', 'Image-paint operations were observed, while no text was extracted. The images may contain the page content.', 'Compare the visible page with the extracted content and provide a properly structured text equivalent.');
+  if (page.textItems === 0) {
+    add('verified', page.ocr?.status === 'recovered' ? 'low' : 'high', 'text', 'No extractable page text', 'The original PDF page had no readable text layer. ' + (page.ocr?.status === 'recovered' ? 'Local OCR produced a draft transcription.' : 'This alone does not prove the page is a scan.'), page.ocr?.status === 'recovered' ? 'The recognized text is already editable in the reading draft. Verify technical terms and names.' : 'Automatic OCR will be attempted on image-backed pages when enabled.');
+    if (page.ocr?.status === 'recovered') {
+      add('verified', 'low', 'text', 'OCR text recovered', 'Recognized ' + page.ocr.characters + ' characters locally (OCR confidence ' + Math.round(page.ocr.confidence || 0) + '%). This is a machine transcription, not original selectable PDF text.', 'Correct OCR errors in the editor before distributing the generated reading copy.');
+    } else if (page.imagePaintCount > 0) {
+      add('potential', 'high', 'visual', 'Possible image-only page', 'Image-paint operations were observed, while no usable text was extracted. The images may contain page content.', 'Try OCR if it was not run or add a transcription to the reading draft.');
     }
+    if (page.ocr?.status === 'failed') add('potential','high','text','OCR unavailable for this page','The in-browser OCR engine could not recognize this page. The original file remains unchanged.','Check your network for the language-model download or paste a transcription in the editor.');
+  } else if (!text) {
+    add('verified','high','text','No extractable page text','Text extraction returned no usable words.','Add an accurate transcription to the reading draft.');
   } else if (text.length < 45) {
     add('potential', 'medium', 'text', 'Very little extractable text', 'Only ' + text.length + ' characters of selectable text were detected on this page.', 'Review the page to determine whether important information is missing from the text layer.');
   }
@@ -81,9 +87,11 @@ export function summarizeAutomation(report: Inspection) {
   const proposedHeadings = report.pages.flatMap((p) => p.blocks).filter((b) => b.kind === 'heading').length;
   const proposedLists = report.pages.flatMap((p) => p.blocks).filter((b) => b.kind === 'list').length;
   const textPages = report.pages.filter((p) => p.text.trim().length > 0).length;
+  const ocrRecoveredPages = report.pages.filter((p) => p.ocr?.status === 'recovered').length;
+  const ocrFailedPages = report.pages.filter((p) => p.ocr?.status === 'failed').length;
   const missingTextPages = report.pages.filter((p) => !p.text.trim()).map((p) => p.number);
   const focusedPages = [...new Set(report.findings.filter((f) => f.severity === 'high' || f.kind === 'manual').map((f) => f.page))];
-  return { proposedHeadings, proposedLists, textPages, missingTextPages, focusedPages };
+  return { proposedHeadings, proposedLists, textPages, missingTextPages, focusedPages, ocrRecoveredPages, ocrFailedPages };
 }
 export function buildInspection(name: string, size: number, pages: PageEvidence[]): Inspection {
   const inspectedPages: PageInspection[] = pages.map((p) => ({
@@ -94,6 +102,7 @@ export function buildInspection(name: string, size: number, pages: PageEvidence[
     textItemCount: p.textItems,
     imagePaintCount: p.imagePaintCount,
     linkAnnotationCount: p.linkAnnotationCount,
+    ocr: p.ocr,
     hasStructureTree: p.structureTree,
     blocks: createBlocks(p),
   }));

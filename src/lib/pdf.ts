@@ -1,7 +1,8 @@
 import { PRODUCT } from '../config';
 import type { PageEvidence } from './inspection';
 import { buildInspection } from './inspection';
-import type { Inspection } from '../types';
+import type { Inspection, OcrLanguage } from '../types';
+import { shouldOcrPage, startOcr, ocrPdfPage, type OcrSession } from './ocr';
 
 export async function validatePdf(file: File): Promise<void> {
   if (file.size === 0) throw new Error('The selected file is empty. Choose a PDF containing pages.');
@@ -11,7 +12,8 @@ export async function validatePdf(file: File): Promise<void> {
   const signature = new TextDecoder('ascii').decode(header);
   if (!signature.includes('%PDF-')) throw new Error('This file does not appear to be a valid PDF.');
 }
-export async function inspectPdf(file: File, progress: (value: number) => void): Promise<Inspection> {
+export interface InspectionOptions { automaticOcr?:boolean; ocrLanguage?:OcrLanguage; onStage?:(message:string)=>void; }
+export async function inspectPdf(file: File, progress: (value: number) => void, options:InspectionOptions = {}): Promise<Inspection> {
   await validatePdf(file);
   const pdfjs = await import('pdfjs-dist');
   const worker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
@@ -19,6 +21,8 @@ export async function inspectPdf(file: File, progress: (value: number) => void):
   const bytes = new Uint8Array(await file.arrayBuffer());
   const task = pdfjs.getDocument({ data: bytes, isEvalSupported: false, useSystemFonts: true, stopAtErrors: true });
   let pdf: Awaited<typeof task.promise> | undefined;
+  let ocrSession: OcrSession | undefined;
+  let ocrStartupFailed=false;
   try {
     pdf = await task.promise;
     if (!pdf.numPages || pdf.numPages > PRODUCT.maxPages) throw new Error('This document exceeds the 80-page inspection limit.');
@@ -59,10 +63,24 @@ export async function inspectPdf(file: File, progress: (value: number) => void):
       const imagePaintCount = ops.fnArray.filter((op) => imageCodes.has(op)).length;
       let linkAnnotationCount: number | undefined;
       try { linkAnnotationCount = (await page.getAnnotations({intent:'display'})).filter((annotation) => annotation.subtype === 'Link').length; } catch { linkAnnotationCount = undefined; }
+      let ocr: PageEvidence['ocr'];
+      if (shouldOcrPage(rows.length,imagePaintCount,options.automaticOcr===true)) {
+        options.onStage?.('Recognizing scanned page '+p+' of '+pdf.numPages+' locally…');
+        try {
+          if (ocrStartupFailed) throw new Error('OCR model unavailable');
+          if (!ocrSession) ocrSession=await startOcr(options.ocrLanguage||'eng');
+          const result=await ocrPdfPage(page,ocrSession,options.ocrLanguage||'eng');
+          ocr=result.ocr;
+          if(result.lines.length)lines.push(...result.lines);
+        }catch {
+          ocr={status:'failed',language:options.ocrLanguage||'eng',characters:0};
+          if(!ocrSession)ocrStartupFailed=true;
+        }
+      }
       let structureTree: boolean | null = null;
       try { structureTree = !!(await page.getStructTree()); } catch { structureTree = null; }
       pages.push({ number: p, width: viewport.width, height: viewport.height,
-        lines, sizes, lineSizes, textItems: rows.length, imagePaintCount, linkAnnotationCount, structureTree });
+        lines, sizes, lineSizes, textItems: rows.length, imagePaintCount, linkAnnotationCount, ocr, structureTree });
       page.cleanup();
       progress(Math.round((p / pdf.numPages) * 100));
     }
@@ -71,5 +89,5 @@ export async function inspectPdf(file: File, progress: (value: number) => void):
     if (error instanceof Error && /password/i.test(error.message)) throw new Error('Password-protected PDFs cannot be inspected. Remove the password with permission and try again.');
     if (error instanceof Error && (/limit|exceeds/i).test(error.message)) throw error;
     throw new Error('This PDF could not be analyzed. It may be corrupt, encrypted or use unsupported features.');
-  } finally { await task.destroy(); }
+  } finally { await ocrSession?.close().catch(()=>undefined); await task.destroy(); }
 }

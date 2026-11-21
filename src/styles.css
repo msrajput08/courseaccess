@@ -14,3 +14,16 @@
 .limitations-details summary{cursor:pointer;font-weight:700}
 .limitations-details .limitations{margin-top:13px}
 @media(max-width:740px){.automation-summary{display:block;padding:24px 20px}.automation-summary h2{font-size:26px}.automation-summary .button{margin-top:18px;width:100%;justify-content:center}}
+
+/* Automatic OCR configuration and generated tagged PDF controls */
+.ocr-options{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;margin-top:23px;padding:19px 22px;background:#f1f6ef;border:1px solid #dce5da;color:#345744}
+.ocr-options label{font-size:12px;font-weight:650;display:flex;align-items:center;gap:8px}
+.ocr-options input{accent-color:#1d5748;width:16px;height:16px}
+.ocr-options select{padding:9px 12px;background:#fff;color:#234a38;border:1px solid #b9cdbb;font-size:12px}
+.ocr-options p{width:100%;font-size:11px;line-height:1.65;color:#4f6455;margin:0}
+.ocr-evidence{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;background:#edf5eb;padding:14px 20px;color:#26543e;border-top:1px solid #d8e6d8;font-size:11px;line-height:1.5}
+.ocr-evidence span{color:#405d4a}
+@media(max-width:740px){.ocr-options{display:grid;grid-template-columns:1fr;padding:16px}.workspace-actions{flex-wrap:wrap}.workspace-actions .button{min-width:calc(50% - 10px);justify-content:center}.workspace-actions .button:last-child{min-width:100%}}
+
+/* Contrast remains strong even during the introductory motion transition. */
+.sample-result small{color:#243e31}.sample-bottom{color:#284334}

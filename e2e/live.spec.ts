@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { makePdf } from './fixtures';
+import { makePdf, makeScannedJpegPdf } from './fixtures';
 
 test('live routes, API and SEO respond from the published Worker', async ({page,request},testInfo) => {
   const errors: string[] = [];
@@ -58,4 +58,36 @@ test('live website has no axe critical/serious accessibility violations on key p
     const serious=result.violations.filter(v=>v.impact==='critical'||v.impact==='serious');
     expect(serious.map(v=>({route,id:v.id,impact:v.impact,nodes:v.nodes.slice(0,5).map(n=>n.target)}))).toEqual([]);
   }
+});
+
+
+test('production OCR converts actual image-only PDF into a tagged, searchable reading copy',async({page})=>{
+  test.setTimeout(180000);
+  const errors:string[]=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  await page.setContent('<html><body style="background:#fff;margin:0"><div id="scan" style="width:900px;height:260px;background:white;padding:25px;box-sizing:border-box;font-family:Arial;color:black"><div style="font-size:58px;font-weight:bold;line-height:1.4">ACCESSIBLE SCIENCE</div><div style="font-size:35px">Cell Biology Lecture Notes</div></div></body></html>');
+  const jpeg=await page.locator('#scan').screenshot({type:'jpeg',quality:96});
+  await page.goto('/checker');
+  await expect(page.getByLabel('Automatically recognize scanned pages (OCR)')).toBeChecked();
+  await page.locator('input[type=file]').setInputFiles({
+    name:'scanned-lesson.pdf',mimeType:'application/pdf',buffer:makeScannedJpegPdf(jpeg),
+  });
+  await expect(page.getByRole('heading',{name:'scanned-lesson.pdf'})).toBeVisible({timeout:150000});
+  await expect(page.getByText('OCR text recovered').first()).toBeVisible();
+  const pending=page.waitForEvent('download');
+  await page.getByRole('button',{name:/Download tagged PDF/}).click();
+  const file=await pending;
+  expect(file.suggestedFilename()).toBe('scanned-lesson-tagged-reading.pdf');
+  const {readFile}=await import('node:fs/promises');
+  const bytes=await readFile(await file.path());
+  expect(bytes.toString('latin1')).toContain('/StructTreeRoot');
+  await page.goto('/checker');
+  await page.getByLabel('Automatically recognize scanned pages (OCR)').uncheck();
+  await page.locator('input[type=file]').setInputFiles({
+    name:'reading-copy.pdf',mimeType:'application/pdf',buffer:bytes,
+  });
+  await expect(page.getByRole('heading',{name:'reading-copy.pdf'})).toBeVisible({timeout:30000});
+  await page.getByRole('tab',{name:'Edit text'}).click();
+  await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
+  expect(errors).toEqual([]);
 });

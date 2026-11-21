@@ -9,3 +9,7 @@
 - Production requires reviewed CSP compatible with the PDF worker, secure session design, scoped ownership checks, rate limits for server-side workloads, signed Stripe webhooks and a data-retention policy.
 - Privacy and terms pages describe current behavior, not legal approval, GDPR, FERPA, WCAG or PDF/UA certification.
 - Fonts currently load from Google Fonts; self-host before launch if a stricter no-third-party request policy is required.
+
+### Client-side OCR
+
+Tesseract.js worker and recognition models are fetched as executable/static resources on demand. Documents and page pixels are processed locally; no OCR API receives the document. Fonts are packaged from an open-source Noto Sans dependency for tagged PDF generation. OCR status is scoped to the current in-memory inspection. Evaluate CSP and third-party dependency updates before institutional rollout.

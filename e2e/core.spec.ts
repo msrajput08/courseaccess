@@ -1,5 +1,5 @@
 import {test,expect} from '@playwright/test';
-import {makePdf,makeImageOnlyPdf,makeStyledPdf} from './fixtures';
+import {makePdf,makeImageOnlyPdf,makeStyledPdf,makeScannedJpegPdf} from './fixtures';
 test('marketing, navigation and pricing clearly distinguish planned features',async({page},testInfo)=>{
   await page.goto('/');
   await page.screenshot({path:'test-results/home-'+testInfo.project.name+'.png',fullPage:true});
@@ -39,6 +39,7 @@ test('private workspace is empty until metadata is explicitly saved',async({page
 
 test('image-only page produces a potential image-only warning and figure-review prompt',async({page})=>{
   await page.goto('/checker');
+  await page.getByLabel('Automatically recognize scanned pages (OCR)').uncheck();
   await page.locator('input[type=file]').setInputFiles({name:'scanned-example.pdf',mimeType:'application/pdf',buffer:makeImageOnlyPdf()});
   await expect(page.getByRole('heading',{name:'scanned-example.pdf'})).toBeVisible({timeout:30000});
   await expect(page.getByText('No extractable page text')).toBeVisible();
@@ -86,4 +87,57 @@ test('proposes semantic heading and list elements from real PDF formatting',asyn
   await page.getByRole('tab',{name:'Edit text'}).click();
   await expect(page.getByLabel('Semantic role').first()).toHaveValue('heading');
   await expect(page.getByLabel('Semantic role').nth(2)).toHaveValue('list');
+});
+
+test('tagged PDF reading export has real semantic PDF tags and searchable extracted text',async({page})=>{
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'structured-source.pdf',mimeType:'application/pdf',buffer:makeStyledPdf(),
+  });
+  await expect(page.getByRole('heading',{name:'structured-source.pdf'})).toBeVisible({timeout:30000});
+  const downloadWait=page.waitForEvent('download');
+  await page.getByRole('button',{name:/Download tagged PDF/}).click();
+  const file=await downloadWait;
+  expect(file.suggestedFilename()).toBe('structured-source-tagged-reading.pdf');
+  const {readFile}=await import('node:fs/promises');
+  const bytes=await readFile(await file.path());
+  expect(bytes.subarray(0,5).toString('latin1')).toBe('%PDF-');
+  expect(bytes.toString('latin1')).toContain('/StructTreeRoot');
+  expect(bytes.toString('latin1')).toContain('/MarkInfo');
+  await page.goto('/checker');
+  await page.getByLabel('Automatically recognize scanned pages (OCR)').uncheck();
+  await page.locator('input[type=file]').setInputFiles({
+    name:'reopened-tagged.pdf',mimeType:'application/pdf',buffer:bytes,
+  });
+  await expect(page.getByRole('heading',{name:'reopened-tagged.pdf'})).toBeVisible({timeout:30000});
+  await page.getByRole('tab',{name:'Edit text'}).click();
+  await expect(page.getByLabel('Extracted text').first()).toHaveValue(/structured-source/);
+});
+test('actual image-only PDF automatically runs OCR and recovers page text',async({page})=>{
+  test.setTimeout(180000);
+  await page.setContent('<html><body style="background:#fff;margin:0"><div id="scan" style="width:900px;height:260px;background:white;padding:25px;box-sizing:border-box;font-family:Arial;color:black"><div style="font-size:58px;font-weight:bold;line-height:1.4">ACCESSIBLE SCIENCE</div><div style="font-size:35px">Cell Biology Lecture Notes</div></div></body></html>');
+  const jpeg=await page.locator('#scan').screenshot({type:'jpeg',quality:96});
+  await page.goto('/checker');
+  await expect(page.getByLabel('Automatically recognize scanned pages (OCR)')).toBeChecked();
+  await page.locator('input[type=file]').setInputFiles({
+    name:'image-scan.pdf',mimeType:'application/pdf',buffer:makeScannedJpegPdf(jpeg),
+  });
+  await expect(page.getByRole('heading',{name:'image-scan.pdf'})).toBeVisible({timeout:150000});
+  await expect(page.getByText('OCR text recovered').first()).toBeVisible();
+  await page.getByRole('tab',{name:'Edit text'}).click();
+  await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
+  const downloadWait=page.waitForEvent('download');
+  await page.getByRole('button',{name:/Download tagged PDF/}).click();
+  const exported=await downloadWait;
+  expect(exported.suggestedFilename()).toBe('image-scan-tagged-reading.pdf');
+  const {readFile}=await import('node:fs/promises');
+  const bytes=await readFile(await exported.path());
+  expect(bytes.toString('latin1')).toContain('/StructTreeRoot');
+  expect(bytes.toString('latin1')).toContain('/MarkInfo');
+  await page.goto('/checker');
+  await page.getByLabel('Automatically recognize scanned pages (OCR)').uncheck();
+  await page.locator('input[type=file]').setInputFiles({name:'ocr-output.pdf',mimeType:'application/pdf',buffer:bytes});
+  await expect(page.getByRole('heading',{name:'ocr-output.pdf'})).toBeVisible({timeout:30000});
+  await page.getByRole('tab',{name:'Edit text'}).click();
+  await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
 });

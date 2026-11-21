@@ -67,3 +67,32 @@ export function makeStyledPdf(): Buffer {
   pdf+='trailer\n<< /Size '+(objects.length+1)+' /Root 1 0 R >>\nstartxref\n'+start+'\n%%EOF';
   return Buffer.from(pdf,'latin1');
 }
+
+
+/** An actual image-only PDF with embedded JPEG pixel data, no hidden text layer. */
+export function makeScannedJpegPdf(jpeg:Buffer,width=900,height=260):Buffer {
+  const imageHeader=Buffer.from('<< /Type /XObject /Subtype /Image /Width '+width+
+    ' /Height '+height+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+jpeg.length+' >>\nstream\n','latin1');
+  const image=Buffer.concat([imageHeader,jpeg,Buffer.from('\nendstream','latin1')]);
+  const drawing='q 525 0 0 152 46 565 cm /Scan Do Q';
+  const objects:Buffer[]=[
+    Buffer.from('<< /Type /Catalog /Pages 2 0 R >>','latin1'),
+    Buffer.from('<< /Type /Pages /Kids [3 0 R] /Count 1 >>','latin1'),
+    Buffer.from('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /XObject << /Scan 5 0 R >> >> /Contents 4 0 R >>','latin1'),
+    Buffer.from('<< /Length '+Buffer.byteLength(drawing,'latin1')+' >>\nstream\n'+drawing+'\nendstream','latin1'),
+    image,
+  ];
+  const parts:Buffer[]=[Buffer.from('%PDF-1.4\n','latin1')];
+  const positions=[0];
+  let offset=parts[0].length;
+  for(let i=0;i<objects.length;i++){
+    const object=Buffer.concat([Buffer.from((i+1)+' 0 obj\n','latin1'),objects[i],Buffer.from('\nendobj\n','latin1')]);
+    positions.push(offset);
+    parts.push(object);offset+=object.length;
+  }
+  const xrefOffset=offset;
+  parts.push(Buffer.from('xref\n0 '+(objects.length+1)+'\n0000000000 65535 f \n'+
+    positions.slice(1).map(x=>String(x).padStart(10,'0')+' 00000 n \n').join('')+
+    'trailer\n<< /Size '+(objects.length+1)+' /Root 1 0 R >>\nstartxref\n'+xrefOffset+'\n%%EOF','latin1'));
+  return Buffer.concat(parts);
+}

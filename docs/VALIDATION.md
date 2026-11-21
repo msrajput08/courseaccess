@@ -23,3 +23,7 @@
 | Mobile/keyboard/screen reader | focus visibility, navigation, status announcements and no overflow |
 
 Production verification is incomplete until real-world academic PDFs, accessibility tooling, visual screenshots, and deployment checks are carried out.
+
+## OCR and tagged PDF regression gate
+
+Verify a real image-only PDF generated from JPEG pixels (not a fake PDF text fixture), confirm OCR text and confidence, then export tagged reading PDF, assert a real `/StructTreeRoot` and `/MarkInfo`, reopen it and confirm selectable text. Separate source PDF/UA conformance validation is not performed by these tests.
