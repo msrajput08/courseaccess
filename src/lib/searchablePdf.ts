@@ -92,7 +92,7 @@ export async function buildSearchableSourcePdf(file: File, report:Inspection): P
         if(size<1.5){skippedWords++;continue;}
         page.drawText(box.text+' ',{
           x:p.x,y:p.y+p.height*.15,size,font,opacity:0,
-          lineHeight:size,characterSpacing:0,
+          lineHeight:size,
         });
         written++;
       }catch {
