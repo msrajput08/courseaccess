@@ -3,7 +3,7 @@ import { AlertCircle, ArrowDownToLine, ArrowLeft, ArrowRight, Check, CheckCheck,
 import { PRODUCT } from '../config';
 import { summarizeAutomation } from '../lib/inspection';
 import { searchablePages } from '../lib/searchablePdf';
-import { auditReadingCopy, moveReadingBlock, parseTable, formulaMathML } from '../lib/semantics';
+import { auditReadingCopy, moveReadingBlock, parseTable, formulaMathML, DOCUMENT_LANGUAGES, inferDocumentLanguage } from '../lib/semantics';
 import { downloadReport, downloadText, downloadBlob, safeStem, semanticHtml } from '../lib/export';
 import { rememberMetadata } from '../lib/history';
 import type { EditableBlock, FindingKind, Inspection } from '../types';
@@ -68,6 +68,7 @@ export default function Workspace({inspection,file,onNew,onSaved}:Props) {
   const tasks=guidedChecks(inspection);
   const [toast,setToast]=useState('');
   const [pdfExporting,setPdfExporting]=useState(false);
+  const [documentLanguage,setDocumentLanguage]=useState(()=>inferDocumentLanguage(inspection));
   const [sourceExporting,setSourceExporting]=useState(false);
   const searchable=searchablePages(inspection);
   const quality=auditReadingCopy(inspection,blocks,approved);
@@ -101,13 +102,13 @@ export default function Workspace({inspection,file,onNew,onSaved}:Props) {
     setToast('Recovered text added to both editable reading formats.');
   }
   function save(){try{rememberMetadata(inspection);onSaved();setToast('Saved only document metadata in this browser. No PDF or text was stored.');}catch{setToast('Local storage was unavailable; no data was saved.');}}
-  function html(){downloadText(safeStem(inspection.name)+'-reviewed.html',semanticHtml(inspection,blocks,approved),'text/html;charset=utf-8');setToast('Semantic HTML reading copy downloaded.');}
+  function html(){downloadText(safeStem(inspection.name)+'-reviewed.html',semanticHtml(inspection,blocks,approved,documentLanguage),'text/html;charset=utf-8');setToast('Semantic HTML reading copy downloaded.');}
   async function taggedPdf(){
     if(pdfExporting)return;
     setPdfExporting(true);setToast('Building tagged PDF reading copy locally…');
     try {
       const {buildTaggedReadingPdf}=await import('../lib/taggedPdf');
-      const blob=await buildTaggedReadingPdf(inspection,blocks,approved);
+      const blob=await buildTaggedReadingPdf(inspection,blocks,approved,documentLanguage);
       downloadBlob(safeStem(inspection.name)+'-tagged-reading.pdf',blob);
       setToast('Tagged reading PDF downloaded. Original PDF remains unchanged.');
     }catch(err){
@@ -129,7 +130,7 @@ export default function Workspace({inspection,file,onNew,onSaved}:Props) {
   }
   return <main className="workspace shell">
     <div className="workspace-top"><button className="text-button" onClick={onNew} type="button"><ArrowLeft size={16}/> New inspection</button><div className="workspace-actions"><button className="button button-quiet" type="button" onClick={save}><Save size={16}/> Save metadata</button><button className="button button-quiet" type="button" onClick={()=>downloadReport(inspection,blocks,approved)}><ArrowDownToLine size={16}/> Report JSON</button><button className="button button-quiet" type="button" onClick={html}><FileCode2 size={16}/> Export HTML</button><button className="button button-primary" type="button" disabled={pdfExporting} onClick={()=>void taggedPdf()}><FileText size={16}/>{pdfExporting?'Building PDF…':'Download tagged PDF'}</button>{searchable.length>0&&<button type="button" className="button button-secondary" disabled={sourceExporting} onClick={()=>void searchablePdf()}><FileText size={16}/>{sourceExporting?'Building searchable PDF…':'Keep layout + searchable OCR'}</button>}</div></div>
-    <div className="workspace-intro"><div><span className="eyebrow">INSPECTION / LOCAL DOCUMENT</span><h1>{inspection.name}</h1><p>Automatic OCR when needed, editable structure, and accessible-first exports—in one workspace.</p></div><span className="private-tag"><LockKeyhole size={15}/> Document stays on this device</span></div>
+    <div className="workspace-intro"><div><span className="eyebrow">INSPECTION / LOCAL DOCUMENT</span><h1>{inspection.name}</h1><p>Automatic OCR when needed, editable structure, and accessible-first exports—in one workspace.</p><label className="document-language">Reading language <select aria-label="Document reading language" value={documentLanguage} onChange={e=>setDocumentLanguage(e.target.value)}>{DOCUMENT_LANGUAGES.map(item=><option value={item.value} key={item.value}>{item.label}</option>)}</select></label></div><span className="private-tag"><LockKeyhole size={15}/> Document stays on this device</span></div>
     <div className="automation-summary" role="region" aria-label="Automated document preparation"><div><span className="eyebrow">AUTOMATED DOCUMENT PREPARATION</span><h2>Reading draft prepared.</h2><p>Text recovered from <strong>{automation.textPages} of {inspection.pageCount} pages</strong>. The checker proposed <strong>{automation.proposedHeadings} heading{automation.proposedHeadings===1?'':'s'}</strong> and <strong>{automation.proposedLists} list item{automation.proposedLists===1?'':'s'}</strong> using observable text formatting. {automation.missingTextPages.length>0?`${automation.missingTextPages.length} page(s) still need text.`:'No missing-text pages detected.'} {automation.ocrRecoveredPages>0?`${automation.ocrRecoveredPages} scanned page(s) recovered by OCR.`:''} {automation.ocrFailedPages>0?`${automation.ocrFailedPages} page(s) could not be recognized.`:''}</p><small>Choose a semantic tagged reading PDF, HTML, or—when OCR geometry exists—a visual-layout-preserving searchable PDF copy. The original file stays unchanged.</small></div><button type="button" className="button button-secondary" onClick={()=>{setTab('edit');setPage(automation.missingTextPages[0]||1);}}>Improve draft <ArrowRight size={16}/></button></div>
     {searchable.length>0&&<div className="searchable-banner" role="region" aria-label="Original-layout searchable PDF">
       <div><span className="eyebrow">NEW · SEARCHABLE SOURCE COPY</span><h2>Keep the design. Recover the words.</h2>

@@ -65,3 +65,5 @@
 .qa-footnote{margin:16px 0 0;font-size:11px;color:#536957;line-height:1.7}
 @media(max-width:800px){.quality-pulse{display:block}.quality-pulse .button{margin-top:13px;width:100%;justify-content:center}.insight-tabs{overflow-x:auto;scrollbar-width:thin}.insight-tabs button{white-space:nowrap;flex-shrink:0}.block-toolbar{align-items:flex-start}}
 @media(max-width:460px){.studio-tools .button{flex:1 1 42%}.qa-metrics{grid-template-columns:1fr 1fr}}
+
+.document-language{display:inline-flex;align-items:center;gap:9px;margin-top:11px;font-size:11px;font-weight:700;color:#425e4e}.document-language select{background:#fff;border:1px solid #c6d7c8;border-radius:6px;color:#24513c;padding:8px 11px;font-size:12px}

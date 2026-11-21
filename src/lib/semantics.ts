@@ -123,3 +123,21 @@ export function auditReadingCopy(
   return {pageCount:report.pageCount,checksPassed,issues,reviewedFigurePages,structuredTables,mathExpressions,
     missingTextPages,status:blockers?'attention-needed':'prepared-with-checks'};
 }
+export const DOCUMENT_LANGUAGES=[
+  {value:'en-US',label:'English'},
+  {value:'hi-IN',label:'Hindi'},
+  {value:'es-ES',label:'Spanish'},
+  {value:'fr-FR',label:'French'},
+  {value:'de-DE',label:'German'},
+] as const;
+export function inferDocumentLanguage(report:Inspection):string {
+  const ocr=report.pages.map(p=>p.ocr).filter(o=>o?.status==='recovered');
+  const votes=new Map<string,number>();
+  const map:Record<string,string>={eng:'en-US',hin:'hi-IN',spa:'es-ES',fra:'fr-FR',deu:'de-DE'};
+  for(const p of ocr)if(p)votes.set(map[p.language],(votes.get(map[p.language])||0)+1);
+  const selected=[...votes.entries()].sort((a,b)=>b[1]-a[1])[0];
+  if(selected)return selected[0];
+  // Only infer Hindi from meaningful Devanagari coverage; otherwise ask user to set language.
+  const text=report.pages.map(p=>p.text).join(' ');
+  return (text.match(/[\u0900-\u097F]/g)||[]).length>25?'hi-IN':'en-US';
+}

@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {buildInspection,type PageEvidence} from '../src/lib/inspection';
-import {parseTable,detectTableRows,formulaMathML,moveReadingBlock,auditReadingCopy} from '../src/lib/semantics';
+import {parseTable,detectTableRows,formulaMathML,moveReadingBlock,auditReadingCopy,inferDocumentLanguage} from '../src/lib/semantics';
 import {semanticHtml} from '../src/lib/export';
 import type {EditableBlock} from '../src/types';
 
@@ -75,5 +75,15 @@ describe('reading-order and document quality engine',()=>{
     expect(qa.issues.some(i=>i.title==='Low-confidence OCR')).toBe(true);
     expect(qa.issues.some(i=>i.title==='Figure meaning not documented')).toBe(true);
     expect('pdfUaCertified' in qa).toBe(false);
+  });
+});
+
+describe('multilingual document reading semantics',()=>{
+  it('uses OCR language evidence for PDF and HTML language selection',()=>{
+    const report=buildInspection('hindi.pdf',100,[{...evidence,
+      ocr:{status:'recovered',language:'hin',confidence:94,characters:40}}]);
+    expect(inferDocumentLanguage(report)).toBe('hi-IN');
+    expect(semanticHtml(report,report.pages[0].blocks,{},'hi-IN')).toContain('<html lang="hi-IN">');
+    expect(semanticHtml(report,report.pages[0].blocks,{},'" onfocus="bad')).toContain('<html lang="en-US">');
   });
 });

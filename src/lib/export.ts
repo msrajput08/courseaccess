@@ -30,7 +30,7 @@ export function linkifyText(text: string): string {
  * MathML is generated from constrained LaTeX by KaTeX, never accepted as
  * arbitrary markup. The first row of a table is a real header row.
  */
-export function semanticHtml(report: Inspection, blocks: EditableBlock[], approvedNotes: Record<number, string> = {}): string {
+export function semanticHtml(report: Inspection, blocks: EditableBlock[], approvedNotes: Record<number, string> = {}, language = 'en-US'): string {
   const byPage = report.pages.map(page => {
     const lines:string[]=[];
     let inList=false;
@@ -73,7 +73,7 @@ export function semanticHtml(report: Inspection, blocks: EditableBlock[], approv
     return '<section aria-labelledby="page-'+page.number+'"><h2 id="page-'+page.number+'">Page '+
       page.number+'</h2>\n'+lines.join('\n')+reviewed+'</section>';
   });
-  return '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'+
+  return '<!doctype html>\n<html lang="'+escapeHtml(/^[a-z]{2,3}-[A-Z]{2}$/.test(language)?language:'en-US')+'"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'+
     '<title>'+escapeHtml(report.name)+' — structured reading copy</title><style>'+
     'body{max-width:74ch;margin:3rem auto;padding:0 1rem;font:1.125rem/1.7 system-ui;color:#1b2623;background:#fff}'+
     'h1,h2,h3,h4{line-height:1.25}section{padding-block:2rem;border-top:1px solid #cbd5d1}'+
