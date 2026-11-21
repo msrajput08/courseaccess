@@ -1,3 +1,4 @@
+export type DocumentFormat = 'pdf'|'docx'|'pptx'|'xlsx'|'odt'|'odp'|'ods'|'epub'|'txt'|'md'|'html'|'csv'|'tsv'|'rtf'|'png'|'jpg'|'jpeg'|'webp';
 export type OcrLanguage = 'eng'|'hin'|'spa'|'fra'|'deu';
 /** PDF image pixel coordinates normalized to [0,1], from top-left. */
 export interface OcrWordBox {
@@ -41,6 +42,8 @@ export interface EditableBlock {
 }
 export interface PageInspection {
   number: number;
+  /** Page, slide, worksheet or section label originating in the input. */
+  label?: string;
   width: number;
   height: number;
   text: string;
@@ -52,6 +55,8 @@ export interface PageInspection {
   blocks: EditableBlock[];
 }
 export interface Inspection {
+  /** Distinguishes paginated PDFs from logically divided office documents. */
+  sourceFormat?: DocumentFormat;
   id: string;
   name: string;
   size: number;

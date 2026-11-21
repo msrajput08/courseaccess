@@ -103,3 +103,25 @@ test('production OCR converts actual image-only PDF into a tagged, searchable re
   await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
   expect(errors).toEqual([]);
 });
+
+
+test('production Word DOCX imports and exports accessible HTML',async({page})=>{
+  const JSZip=(await import('jszip')).default;
+  const zip=new JSZip();
+  zip.file('word/document.xml','<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Inclusive Biology Lesson</w:t></w:r></w:p><w:p><w:r><w:t>Course activities for students and professors.</w:t></w:r></w:p></w:body></w:document>');
+  const source=await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'});
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'class-notes.docx',mimeType:'application/octet-stream',buffer:source,
+  });
+  await expect(page.getByRole('heading',{name:'class-notes.docx'})).toBeVisible({timeout:30000});
+  await expect(page.getByRole('region',{name:/Imported source content/})).toContainText('Inclusive Biology Lesson');
+  const pending=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export HTML'}).click();
+  const file=await pending;
+  expect(file.suggestedFilename()).toBe('class-notes-reviewed.html');
+  const html=await (await import('node:fs/promises')).readFile(await file.path(),'utf8');
+  expect(html).toContain('<h2>Inclusive Biology Lesson</h2>');
+  expect(errors).toEqual([]);
+});
