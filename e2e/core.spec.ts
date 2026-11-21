@@ -71,7 +71,7 @@ test('missing selectable text can be recovered inside the generated HTML draft',
   await page.getByRole('button',{name:/Page 02/i}).click();
   await page.getByRole('tab',{name:'Edit text'}).click();
   await page.getByLabel('Add recovered page text').fill('Recovered chapter text for students.');
-  await page.getByRole('button',{name:/Add text to HTML draft/i}).click();
+  await page.getByRole('button',{name:/Add text to reading copy/i}).click();
   await expect(page.getByLabel('Extracted text').first()).toHaveValue('Recovered chapter text for students.');
   const wait=page.waitForEvent('download');
   await page.getByRole('button',{name:/Export HTML/}).click();
@@ -177,3 +177,51 @@ test('actual image-only PDF automatically runs OCR and recovers page text',async
   await expect(page.getByText('No extractable page text')).toHaveCount(0);
 });
 
+
+
+test('professional studio produces table, accessible math and auditable reading order in both reading formats',async({page})=>{
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({name:'lab-material.pdf',mimeType:'application/pdf',buffer:makePdf([
+    'Laboratory results for classroom demonstration with a data table and equation.'])});
+  await expect(page.getByRole('heading',{name:'lab-material.pdf'})).toBeVisible({timeout:30000});
+  await page.getByRole('tab',{name:'Edit text'}).click();
+  await page.getByRole('button',{name:'Add table'}).click();
+  await page.getByLabel('Tab-separated table (first row is headers)').fill('Subject\tResult\nBiology\t95\nPhysics\t90');
+  await page.getByLabel('Table caption').fill('Course assessment results');
+  await page.getByRole('button',{name:'Add equation'}).click();
+  await page.getByLabel('LaTeX equation').fill('x^2+y^2=z^2');
+  await page.getByLabel('Spoken explanation of the mathematics').fill('The squares of x and y sum to the square of z.');
+  await expect(page.getByText('Valid LaTeX → MathML conversion ready for HTML export.')).toBeVisible();
+  await page.getByRole('button',{name:'Move block 3 up'}).click();
+  await page.getByRole('tab',{name:'Document QA'}).click();
+  await expect(page.getByRole('heading',{name:'Document quality report'})).toBeVisible();
+  await expect(page.getByText('Structured tables')).toBeVisible();
+  await expect(page.getByText('Math expressions')).toBeVisible();
+  const qualityEvent=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download QA evidence'}).click();
+  const qa=await qualityEvent;
+  expect(qa.suggestedFilename()).toBe('lab-material-readiness-audit.json');
+
+  const htmlEvent=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export HTML'}).click();
+  const htmlFile=await htmlEvent;
+  const {readFile}=await import('node:fs/promises');
+  const html=await readFile(await htmlFile.path(),'utf8');
+  expect(html).toContain('<th scope="col">Subject</th>');
+  expect(html).toContain('<caption>Course assessment results</caption>');
+  expect(html).toContain('<math');
+  expect(html).toContain('squares of x and y');
+
+  const pdfEvent=page.waitForEvent('download');
+  await page.getByRole('button',{name:/Download tagged PDF/}).click();
+  const pdfFile=await pdfEvent;
+  const binary=await readFile(await pdfFile.path());
+  expect(binary.subarray(0,5).toString('latin1')).toBe('%PDF-');
+  expect(binary.toString('latin1')).toContain('/StructTreeRoot');
+  expect(binary.toString('latin1')).toContain('/Formula');
+  expect(binary.toString('latin1')).toContain('/Table');
+  await page.goto('/checker');
+  await page.getByLabel('Automatically recognize scanned pages (OCR)').uncheck();
+  await page.locator('input[type=file]').setInputFiles({name:'rebuilt-lab.pdf',mimeType:'application/pdf',buffer:binary});
+  await expect(page.getByRole('heading',{name:'rebuilt-lab.pdf'})).toBeVisible({timeout:30000});
+});

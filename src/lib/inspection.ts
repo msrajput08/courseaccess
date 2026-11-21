@@ -1,4 +1,5 @@
 import type { EditableBlock, Finding, Inspection, PageInspection, PageOcr } from '../types';
+import { detectTableRows } from './semantics';
 
 export interface PageEvidence {
   number: number;
@@ -69,18 +70,28 @@ export function detectFindings(page: PageEvidence): Finding[] {
 export function createBlocks(page: PageEvidence): EditableBlock[] {
   const validSizes = page.sizes.filter((n) => Number.isFinite(n) && n > 0 && n < 250).sort((a, b) => a - b);
   const baseline = validSizes.length ? validSizes[Math.floor(validSizes.length / 2)] : 0;
-  const lines = page.lines.map((line, i) => ({ text: line.trim(), size: page.lineSizes?.[i] || 0 })).filter((line) => line.text);
-  return lines.slice(0, 400).map(({ text, size }, i) => {
-    const bullet = /^(?:[•●◦▪‣]|[-*])\s+/.test(text);
-    const heading = !bullet && baseline >= 7 && size >= Math.max(14, baseline * 1.4) &&
-      text.length <= 100 && !/[.!?;:,]$/.test(text);
-    return {
-      id: 'p' + page.number + '-b' + i,
-      page: page.number,
-      kind: bullet ? 'list' : heading ? 'heading' : 'paragraph',
-      text: bullet ? text.replace(/^(?:[•●◦▪‣]|[-*])\s+/, '') : text,
-    };
-  });
+  const lines = page.lines.map((line, i) => ({ text: line.trim(), size: page.lineSizes?.[i] || 0 })).filter((line) => line.text).slice(0,400);
+  const result: EditableBlock[] = [];
+  for(let i=0;i<lines.length;) {
+    const table=detectTableRows(lines.map(line=>line.text),i);
+    if(table) {
+      result.push({id:'p'+page.number+'-b'+i,page:page.number,kind:'table',
+        text:table.rows.map(row=>row.join('\t')).join('\n'),
+        description:table.caption||''});
+      i+=table.rows.length+(table.skipCaption?1:0);
+      continue;
+    }
+    const {text,size}=lines[i];
+    const bullet=/^(?:[•●◦▪‣]|[-*])\s+/.test(text);
+    const heading=!bullet && baseline>=7 && size>=Math.max(14,baseline*1.4) &&
+      text.length<=100 && !/[.!?;:,]$/.test(text);
+    result.push({id:'p'+page.number+'-b'+i,page:page.number,
+      kind:bullet?'list':heading?'heading':'paragraph',
+      headingLevel:heading?3:undefined,
+      text:bullet?text.replace(/^(?:[•●◦▪‣]|[-*])\s+/,''):text});
+    i++;
+  }
+  return result;
 }
 
 export function summarizeAutomation(report: Inspection) {

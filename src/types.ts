@@ -18,7 +18,7 @@ export interface PageOcr {
 export type FindingKind = 'verified' | 'potential' | 'manual';
 export type Severity = 'high' | 'medium' | 'low' | 'review';
 export type IssueCategory = 'text' | 'structure' | 'visual' | 'reading-order' | 'stem';
-export type BlockKind = 'heading' | 'paragraph' | 'list' | 'blockquote';
+export type BlockKind = 'heading' | 'paragraph' | 'list' | 'blockquote' | 'table' | 'equation';
 export interface Finding {
   id: string;
   page: number;
@@ -34,6 +34,10 @@ export interface EditableBlock {
   page: number;
   kind: BlockKind;
   text: string;
+  /** Only heading blocks use this hierarchy setting. */
+  headingLevel?: 2 | 3 | 4;
+  /** Table caption, or spoken explanation for a math formula. */
+  description?: string;
 }
 export interface PageInspection {
   number: number;

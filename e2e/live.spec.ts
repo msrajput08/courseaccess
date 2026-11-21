@@ -40,7 +40,7 @@ test('real deployed checker processes PDF, prepares reading draft and exports', 
   await page.getByRole('tab',{name:'Edit text'}).click();
   await expect(page.getByLabel('Add recovered page text')).toBeVisible();
   await page.getByLabel('Add recovered page text').fill('Recovered accessible text for this page.');
-  await page.getByRole('button',{name:/Add text to HTML draft/}).click();
+  await page.getByRole('button',{name:/Add text to reading copy/}).click();
   await expect(page.getByLabel('Extracted text').first()).toHaveValue('Recovered accessible text for this page.');
   const dl=page.waitForEvent('download');
   await page.getByRole('button',{name:/Export HTML/}).click();
