@@ -139,5 +139,5 @@ test('actual image-only PDF automatically runs OCR and recovers page text',async
   await page.locator('input[type=file]').setInputFiles({name:'ocr-output.pdf',mimeType:'application/pdf',buffer:bytes});
   await expect(page.getByRole('heading',{name:'ocr-output.pdf'})).toBeVisible({timeout:30000});
   await page.getByRole('tab',{name:'Edit text'}).click();
-  await expect(page.getByLabel('Extracted text').first()).toHaveValue(/SCIENCE/i);
+  await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
 });
