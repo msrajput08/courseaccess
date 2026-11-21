@@ -83,7 +83,7 @@ export function semanticHtml(report: Inspection, blocks: EditableBlock[], approv
     'th{background:#edf5ef}caption{text-align:left;font-weight:700;padding:.25rem 0}'+
     '.equation{margin:1rem 0;overflow-x:auto}.math-description{font-size:.9em;color:#344d43}'+
     '</style></head><body><main><h1>'+escapeHtml(report.name)+'</h1>'+
-    '<p><small>Edited reading copy generated from the PDF text layer and optional OCR. '+ 
+    '<p><small>Edited reading copy generated from available source text and optional OCR. '+ 
     'Complex figures and spatial layouts need source-specific verification. This is not a claim of PDF/UA conformance.</small></p>'+
     byPage.join('\n')+'</main></body></html>';
 }
@@ -97,7 +97,7 @@ export function downloadText(filename: string, text: string, mime: string): void
   window.setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 export function safeStem(filename: string): string {
-  return (filename.replace(/\.pdf$/i, '').replace(/[^a-z0-9_-]/gi, '-').replace(/-+/g, '-').slice(0, 70) || 'courseaccess-report');
+  return (filename.replace(/\.[^.]+$/i, '').replace(/[^a-z0-9_-]/gi, '-').replace(/-+/g, '-').slice(0, 70) || 'courseaccess-report');
 }
 export function downloadReport(report: Inspection, editedBlocks?: EditableBlock[], reviewedNotes?: Record<number, string>): void {
   downloadText(safeStem(report.name) + '-inspection.json', JSON.stringify({

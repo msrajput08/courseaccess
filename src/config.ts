@@ -2,6 +2,8 @@ export const PRODUCT = {
   name: 'CourseAccess',
   tagline: 'Every lesson. Accessible to everyone.',
   maxPdfBytes: 20 * 1024 * 1024,
+  maxDocumentBytes: 20 * 1024 * 1024,
+  maxUnpackedBytes: 64 * 1024 * 1024,
   maxPages: 80,
   maxCanvasPixels: 2_500_000,
   // These are display-only proposals until a server-verified identity/usage service exists.
