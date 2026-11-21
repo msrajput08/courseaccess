@@ -1,9 +1,19 @@
 export type OcrLanguage = 'eng'|'hin'|'spa'|'fra'|'deu';
+/** PDF image pixel coordinates normalized to [0,1], from top-left. */
+export interface OcrWordBox {
+  text: string;
+  confidence: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 export interface PageOcr {
   status: 'recovered'|'empty'|'failed';
   language: OcrLanguage;
   confidence?: number;
   characters: number;
+  words?: OcrWordBox[];
 }
 export type FindingKind = 'verified' | 'potential' | 'manual';
 export type Severity = 'high' | 'medium' | 'low' | 'review';
