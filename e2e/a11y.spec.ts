@@ -7,7 +7,7 @@ for (const route of routes) {
     await page.goto(route);
     const report=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa']).analyze();
     const serious=report.violations.filter(v=>v.impact==='critical'||v.impact==='serious');
-    const formatted=serious.map(v=>({id:v.id,impact:v.impact,description:v.description,affected:v.nodes.slice(0,6).map(n=>({selector:n.target,summary:n.failureSummary}))}));
+    const formatted=serious.map(v=>({id:v.id,impact:v.impact,description:v.description,affected:v.nodes.map(n=>({selector:n.target,summary:n.failureSummary}))}));
     expect(formatted,JSON.stringify(formatted,null,2)).toEqual([]);
   });
 }
