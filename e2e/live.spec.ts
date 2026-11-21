@@ -48,3 +48,14 @@ test('real deployed checker processes PDF, prepares reading draft and exports', 
   await page.screenshot({path:'test-results/live/checker-'+testInfo.project.name+'.png',fullPage:true});
   expect(errors).toEqual([]);
 });
+
+
+test('live website has no axe critical/serious accessibility violations on key public pages', async ({page}) => {
+  const {default:AxeBuilder}=await import('@axe-core/playwright');
+  for(const route of ['/','/checker','/pricing']){
+    await page.goto(route);
+    const result=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa']).analyze();
+    const serious=result.violations.filter(v=>v.impact==='critical'||v.impact==='serious');
+    expect(serious.map(v=>({route,id:v.id,impact:v.impact,nodes:v.nodes.slice(0,5).map(n=>n.target)}))).toEqual([]);
+  }
+});
