@@ -99,7 +99,7 @@ export function auditReadingCopy(
       if(approved[page.number]?.trim()){reviewedFigurePages++;checksPassed++;}
       else add(page.number,'figure','Figure meaning not documented','If the page contains a meaningful diagram or chart, add and approve its description.','improvement');
     }
-    let lastHeading=1;
+    let lastHeading=2;
     for(const block of current){
       if(block.kind==='heading') {
         const level=block.headingLevel||3;
