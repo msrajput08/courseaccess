@@ -22,8 +22,10 @@ export default {
     // particular a stale index.html paired with removed hashed JS causes a
     // blank mobile screen (MIME text/html instead of JavaScript).
     if((request.method==='GET'||request.method==='HEAD') && isAppNavigation(url.pathname)){
-      const assetUrl=new URL('/index.html',url.origin);
-      const shell=await env.ASSETS.fetch(new Request(assetUrl,request));
+      // Let Cloudflare's SPA asset binding resolve the route to its current
+      // HTML shell. Fetching /index.html directly can trigger its canonical
+      // route redirect instead of serving the document body.
+      const shell=await env.ASSETS.fetch(request);
       const headers=new Headers(shell.headers);
       headers.set('cache-control','no-store, no-cache, must-revalidate');
       headers.set('pragma','no-cache');
