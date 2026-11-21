@@ -49,7 +49,7 @@ for(const source of samples){
     await expect(page.getByRole('heading',{name:'Reading draft prepared.'})).toBeVisible();
     await expect(page.locator('.pdf-canvas')).toHaveCount(0);
     await page.getByRole('tab',{name:'Edit text'}).click();
-    await expect(page.getByLabel('Extracted text').first()).not.toHaveValue('');
+    await expect(page.locator('.edit-block textarea').first()).not.toHaveValue('');
   });
 }
 test('DOCX heading and table reach genuine HTML and independently tagged PDF reading exports',async({page})=>{
