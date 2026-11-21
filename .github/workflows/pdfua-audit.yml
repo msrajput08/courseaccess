@@ -1,0 +1,54 @@
+name: Independent PDF/UA validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pdfua-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install app and Chromium
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Generate actual app exports in the browser
+        run: npx playwright test --config=playwright.pdfua.config.ts
+      - name: Install independent reference PDF/UA generator
+        uses: typst-community/setup-typst@v4
+      - name: Produce known-good PDF/UA-1 reference
+        run: |
+          mkdir -p pdfua-artifacts/generated pdfua-artifacts/reports
+          typst compile --pdf-standard ua-1 quality/reference.typ pdfua-artifacts/generated/typst-reference.pdf
+      - name: Validate actual samples with veraPDF CLI 1.30.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          for sample in typst-reference reading-basic reading-stem; do
+            docker run --rm -v "$PWD/pdfua-artifacts:/data" \
+              verapdf/cli:v1.30.4 \
+              -f ua1 --format xml "/data/generated/$sample.pdf" \
+              > "pdfua-artifacts/reports/$sample.xml" \
+              2> "pdfua-artifacts/reports/$sample.stderr"
+          done
+      - name: Parse exact compliance and failed rules
+        run: python3 scripts/summarize_pdfua.py
+      - name: Upload independent validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: independent-pdfua-evidence
+          path: |
+            pdfua-artifacts/
+            test-results/pdfua-export/
+          if-no-files-found: warn
