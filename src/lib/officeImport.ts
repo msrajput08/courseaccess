@@ -248,7 +248,8 @@ function odfBlocks(container:Element,label:string):ImportedSection{
       else for(const row of rows)push(blocks,paragraph(row.join(' | ')));
     }else for(const child of elementChildren(element))handle(child,listed);
   };
-  for(const child of elementChildren(container))handle(child);
+  if(container.localName==='table' && container.prefix==='table')handle(container);
+  else for(const child of elementChildren(container))handle(child);
   return {label,blocks,imageCount};
 }
 async function parseOdf(zip:JSZip,format:DocumentFormat):Promise<ImportedSection[]>{
