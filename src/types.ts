@@ -1,3 +1,10 @@
+export type OcrLanguage = 'eng'|'hin'|'spa'|'fra'|'deu';
+export interface PageOcr {
+  status: 'recovered'|'empty'|'failed';
+  language: OcrLanguage;
+  confidence?: number;
+  characters: number;
+}
 export type FindingKind = 'verified' | 'potential' | 'manual';
 export type Severity = 'high' | 'medium' | 'low' | 'review';
 export type IssueCategory = 'text' | 'structure' | 'visual' | 'reading-order' | 'stem';
@@ -26,6 +33,7 @@ export interface PageInspection {
   textItemCount: number;
   imagePaintCount: number;
   linkAnnotationCount?: number;
+  ocr?: PageOcr;
   hasStructureTree: boolean | null;
   blocks: EditableBlock[];
 }
