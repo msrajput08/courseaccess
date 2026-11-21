@@ -124,8 +124,28 @@ test('actual image-only PDF automatically runs OCR and recovers page text',async
   });
   await expect(page.getByRole('heading',{name:'image-scan.pdf'})).toBeVisible({timeout:150000});
   await expect(page.getByText('OCR text recovered').first()).toBeVisible();
+  await expect(page.locator('.preview-status')).toHaveCount(0);
+  const samplePagePixels=async()=>page.locator('.pdf-canvas').evaluate((element)=>{
+    const canvas=element as HTMLCanvasElement;
+    const pixels=canvas.getContext('2d')!.getImageData(0,0,canvas.width,canvas.height).data;
+    const stride=Math.max(4,Math.floor(pixels.length/16000/4)*4);
+    const sample:number[]=[];
+    for(let offset=0;offset+2<pixels.length;offset+=stride){
+      sample.push(pixels[offset],pixels[offset+1],pixels[offset+2]);
+    }
+    return sample;
+  });
+  const sourceVisual=await samplePagePixels();
   await page.getByRole('tab',{name:'Edit text'}).click();
   await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
+  // Build an additional original-layout OCR copy (the existing page artwork
+  // remains visible, while positioned OCR words are selectable).
+  const searchablePending=page.waitForEvent('download');
+  await page.getByRole('button',{name:/Keep layout \+ searchable OCR/}).click();
+  const searchableFile=await searchablePending;
+  expect(searchableFile.suggestedFilename()).toBe('image-scan-searchable-original-layout.pdf');
+  const searchableBytes=await (await import('node:fs/promises')).readFile(await searchableFile.path());
+  expect(searchableBytes.subarray(0,5).toString('latin1')).toBe('%PDF-');
   const downloadWait=page.waitForEvent('download');
   await page.getByRole('button',{name:/Download tagged PDF/}).click();
   const exported=await downloadWait;
@@ -140,4 +160,20 @@ test('actual image-only PDF automatically runs OCR and recovers page text',async
   await expect(page.getByRole('heading',{name:'ocr-output.pdf'})).toBeVisible({timeout:30000});
   await page.getByRole('tab',{name:'Edit text'}).click();
   await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
+  await page.goto('/checker');
+  await page.getByLabel('Automatically recognize scanned pages (OCR)').uncheck();
+  await page.locator('input[type=file]').setInputFiles({name:'original-look-searchable.pdf',mimeType:'application/pdf',buffer:searchableBytes});
+  await expect(page.getByRole('heading',{name:'original-look-searchable.pdf'})).toBeVisible({timeout:30000});
+  await expect(page.locator('.preview-status')).toHaveCount(0);
+  const searchableVisual=await samplePagePixels();
+  expect(searchableVisual.length).toBe(sourceVisual.length);
+  const averageDelta=searchableVisual.reduce((sum,value,index)=>
+    sum+Math.abs(value-sourceVisual[index]),0)/(255*sourceVisual.length);
+  // Visually indistinguishable within a 0.2% average color tolerance.
+  // Browser PNG screenshot encoders can differ despite same canvas pixels.
+  expect(averageDelta).toBeLessThan(0.002);
+  await page.getByRole('tab',{name:'Edit text'}).click();
+  await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
+  await expect(page.getByText('No extractable page text')).toHaveCount(0);
 });
+

@@ -74,6 +74,12 @@ test('production OCR converts actual image-only PDF into a tagged, searchable re
   });
   await expect(page.getByRole('heading',{name:'scanned-lesson.pdf'})).toBeVisible({timeout:150000});
   await expect(page.getByText('OCR text recovered').first()).toBeVisible();
+  const searchablePending=page.waitForEvent('download');
+  await page.getByRole('button',{name:/Keep layout \+ searchable OCR/}).click();
+  const sourceCopy=await searchablePending;
+  expect(sourceCopy.suggestedFilename()).toBe('scanned-lesson-searchable-original-layout.pdf');
+  const searchableBytes=await (await import('node:fs/promises')).readFile(await sourceCopy.path());
+  expect(searchableBytes.subarray(0,5).toString('latin1')).toBe('%PDF-');
   const pending=page.waitForEvent('download');
   await page.getByRole('button',{name:/Download tagged PDF/}).click();
   const file=await pending;
@@ -87,6 +93,12 @@ test('production OCR converts actual image-only PDF into a tagged, searchable re
     name:'reading-copy.pdf',mimeType:'application/pdf',buffer:bytes,
   });
   await expect(page.getByRole('heading',{name:'reading-copy.pdf'})).toBeVisible({timeout:30000});
+  await page.getByRole('tab',{name:'Edit text'}).click();
+  await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
+  await page.goto('/checker');
+  await page.getByLabel('Automatically recognize scanned pages (OCR)').uncheck();
+  await page.locator('input[type=file]').setInputFiles({name:'layout-ocr.pdf',mimeType:'application/pdf',buffer:searchableBytes});
+  await expect(page.getByRole('heading',{name:'layout-ocr.pdf'})).toBeVisible({timeout:30000});
   await page.getByRole('tab',{name:'Edit text'}).click();
   await expect.poll(async()=>await page.getByLabel('Extracted text').evaluateAll(elements=>elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/SCIENCE/i);
   expect(errors).toEqual([]);
