@@ -76,7 +76,7 @@ describe('safe reviewed export', () => {
     expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
     expect(html).toContain('&lt;script&gt;bad()&lt;/script&gt;');
     expect(html).not.toContain('<script>');
-    expect(html).toContain('image not included');
+    expect(html).toContain('image not reproduced');
   });
   it('normalizes downloaded filenames', () => {
     expect(safeStem('Biology / lecture.pdf')).toBe('Biology-lecture');
