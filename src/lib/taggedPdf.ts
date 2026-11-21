@@ -17,7 +17,7 @@ export async function buildTaggedReadingPdf(
   }
   // PDFKit's browser build uses embedded WOFF fonts. Import lazily so the
   // checker stays small until a user explicitly requests a PDF export.
-  const [{PDFDocument}, regularAsset, boldAsset, devanagariAsset] = await Promise.all([
+  const [pdfModule, regularAsset, boldAsset, devanagariAsset] = await Promise.all([
     import('pdfkit'),
     import('@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff?url'),
     import('@fontsource/noto-sans/files/noto-sans-latin-700-normal.woff?url'),
@@ -43,7 +43,8 @@ export async function buildTaggedReadingPdf(
     list:(items:string[],options?:Record<string,unknown>)=>Doc;
     moveDown:(lines?:number)=>Doc;
   };
-  const PdfCtor=PDFDocument as unknown as new (options:Record<string,unknown>)=>Doc;
+  const PDFDocument=(pdfModule as unknown as {PDFDocument?:unknown;default:unknown}).PDFDocument ?? pdfModule.default;
+  const PdfCtor=PDFDocument as new (options:Record<string,unknown>)=>Doc;
   const doc=new PdfCtor({
     pdfVersion:'1.7',tagged:true,lang:language,displayTitle:true,autoFirstPage:false,
     margins:{top:55,bottom:55,left:60,right:60},info:{

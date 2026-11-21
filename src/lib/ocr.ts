@@ -25,7 +25,7 @@ export async function startOcr(language:OcrLanguage):Promise<OcrSession> {
       const result=await worker.recognize(canvas);
       return {text:result.data.text,confidence:result.data.confidence};
     },
-    close:()=>worker.terminate(),
+    close:async()=>{await worker.terminate();},
   };
 }
 export function normalizeOcrResult(language:OcrLanguage, text:string, confidence:number): {ocr:PageOcr; lines:string[]} {
