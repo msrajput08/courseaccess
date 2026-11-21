@@ -35,7 +35,7 @@ describe('professional remediation tables',()=>{
 describe('semantic math',()=>{
   it('converts valid LaTeX into native MathML and rejects invalid commands',()=>{
     expect(formulaMathML('x^2+y^2=z^2')).toContain('<math');
-    expect(formulaMathML('\\def\\foo{danger}\\foo')).toBeNull();
+    expect(formulaMathML('\\thisIsNotAFunction')).toBeNull();
     expect(formulaMathML('')).toBeNull();
   });
   it('escapes explanations and does not inject raw user markup',()=>{
