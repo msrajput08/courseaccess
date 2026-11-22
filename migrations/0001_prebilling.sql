@@ -97,10 +97,14 @@ CREATE TRIGGER IF NOT EXISTS reserve_usage_before_insert
 BEFORE INSERT ON usage_events
 BEGIN
   SELECT CASE WHEN NOT EXISTS(
+    SELECT 1 FROM usage_events WHERE idempotency_key=NEW.idempotency_key
+  ) AND NOT EXISTS(
     SELECT 1 FROM usage_periods
     WHERE account_id=NEW.account_id AND period_utc=NEW.period_utc
   ) THEN RAISE(ABORT,'Usage period is not provisioned') END;
-  SELECT CASE WHEN EXISTS(
+  SELECT CASE WHEN NOT EXISTS(
+    SELECT 1 FROM usage_events WHERE idempotency_key=NEW.idempotency_key
+  ) AND EXISTS(
     SELECT 1 FROM usage_periods
     WHERE account_id=NEW.account_id AND period_utc=NEW.period_utc AND used >= quota
   ) THEN RAISE(ABORT,'Monthly quota exhausted') END;
