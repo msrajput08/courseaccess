@@ -1,6 +1,6 @@
 # Pre-payment infrastructure: account, institution and quota data
 
-**Status:** Migration and SQLite invariant tests are implemented in the Phase 3 branch. Authentication and paid entitlements are **not enabled**. A database has **not** been provisioned, bound, or migrated on production. No checkout, verified provider events or subscription activation is available.
+**Status:** Phase 3 includes a real optional passkey/session and institution-membership implementation, local D1 test configuration and database migrations. Production account activation is **disabled** because a real owner's D1 database and verified origin have not been provisioned/bound/migrated. The free checker stays public. All paid entitlements, hosted document storage and checkout remain disabled.
 
 ## Design boundary
 
@@ -39,3 +39,36 @@ python3 -m unittest discover -s scripts -p 'test_*.py'
 This proves local SQLite constraints. It does **not** prove end-to-end secure authentication, Cloudflare D1 production behavior or multi-tenant access control.
 
 Reference: Cloudflare D1 migrations https://developers.cloudflare.com/d1/reference/migrations/ ; D1 batch atomicity https://developers.cloudflare.com/d1/worker-api/d1-database/.
+
+## Implemented server and browser flows
+
+- `POST /api/auth/register/options` and `register/verify`: discoverable device passkey registration via SimpleWebAuthn, origin/RP verification, user verification, atomic D1 challenge consumption and account+credential+session creation.
+- `POST /api/auth/login/options` and `login/verify`: discoverable passkey sign-in, origin/challenge/signature/counter verification, hashed opaque 14-day session in a Secure/HttpOnly/SameSite cookie.
+- `POST /api/auth/passkeys/options` and `passkeys/verify`: add an independent backup passkey to a signed-in account. **No insecure email-only account recovery is present.**
+- `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/delete`: server-backed session lookup, revocation and deletion. Deletion requires a recently verified (10-minute) session plus an exact confirmation phrase; organizations owned by the user are deleted too.
+- `/api/organizations`: registered account creation and listing; authenticated member listing, controlled addition/removal, owner-approved role changes, atomic ownership transfer and owner deletion. Only registered account IDs can be added—no unverified email invitations.
+- Origin-checked JSON mutations, one-time expiring challenges, D1-backed request-rate limiting, request size caps and server-only authorization checks. The UI never determines security-critical roles or paid entitlements.
+
+**Not shipped automatically:** an independent production security audit, production D1 binding, customer domain validation, account recovery for users without any passkey, meaningful institutional collaboration/cloud storage or owner-approved release. A membership is a directory/authorization boundary and is not yet a paid team workspace.
+
+### Isolated test commands
+
+```sh
+npm install
+npm run check
+npm run build
+npm run test:auth:worker
+```
+
+The last command starts a *local* Cloudflare Worker, applies both migrations to an isolated local D1 database and runs real Chromium virtual-authenticator WebAuthn ceremonies, membership and CSRF checks. The test database ID in `wrangler.auth.test.jsonc` is a fixture only; **never bind it to a production Worker**.
+
+## Owner-controlled production D1 provisioning (required before activation)
+
+1. Log in to the correct Cloudflare account using Wrangler. Verify final domain and the account's D1 quotas and backups. The current example uses the already deployed workers.dev origin; custom domains require an RP-ID/origin migration plan because passkeys are origin-bound.
+2. Run `npx wrangler d1 create courseaccess-primary` **once** and note the real generated ID outside any secrets/log text. Do not create an arbitrary ID. Use a separate database for staging.
+3. Copy `wrangler.auth.production.example.jsonc` to an owner-controlled config. Set the exact real D1 ID, verified HTTPS `COURSEACCESS_AUTH_ORIGIN`, and leave `COURSEACCESS_ACCOUNTS_ENABLED=false`.
+4. Back up, apply `npx wrangler d1 migrations apply DB --remote --config <your-config>` and verify schema, database permissions, indexes, usage triggers and sample account round-trip in staging first. Never apply production migrations against an unexpected account.
+5. Perform external security review, actual passkey/device testing, retention/legal checks, rate-limit/WAF review and restore exercise. Only then change `COURSEACCESS_ACCOUNTS_ENABLED` to `true` and publish using the approved config. Confirm the API status and session behavior on the exact domain, and inspect CSP.
+6. Keep `COURSEACCESS_PLANS_JSON` paid features disabled; a payment gateway and signed reconciliation are separate future work.
+
+Do not publish the example template as-is: its placeholder ID will never identify a real database. No live provisioning or production account activation is performed by this PR.
