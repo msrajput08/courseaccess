@@ -61,6 +61,14 @@ export async function inspectPdf(file: File, progress: (value: number) => void, 
         pdfjs.OPS.paintImageMaskXObject, pdfjs.OPS.paintImageMaskXObjectRepeat,
       ]);
       const imagePaintCount = ops.fnArray.filter((op) => imageCodes.has(op)).length;
+      // PDF graphics can be pure vector paths with no image XObject at all.
+      // Treat paint operators as review cues, not proof of an inaccessible figure.
+      const vectorCodes=new Set<number>([
+        pdfjs.OPS.stroke,pdfjs.OPS.closeStroke,pdfjs.OPS.fill,pdfjs.OPS.eoFill,
+        pdfjs.OPS.fillStroke,pdfjs.OPS.eoFillStroke,pdfjs.OPS.closeFillStroke,
+        pdfjs.OPS.closeEOFillStroke,pdfjs.OPS.shadingFill,
+      ]);
+      const vectorPaintCount=ops.fnArray.filter(op=>vectorCodes.has(op)).length;
       let linkAnnotationCount: number | undefined;
       try { linkAnnotationCount = (await page.getAnnotations({intent:'display'})).filter((annotation) => annotation.subtype === 'Link').length; } catch { linkAnnotationCount = undefined; }
       let ocr: PageEvidence['ocr'];
@@ -80,7 +88,7 @@ export async function inspectPdf(file: File, progress: (value: number) => void, 
       let structureTree: boolean | null = null;
       try { structureTree = !!(await page.getStructTree()); } catch { structureTree = null; }
       pages.push({ number: p, width: viewport.width, height: viewport.height,
-        lines, sizes, lineSizes, textItems: rows.length, imagePaintCount, linkAnnotationCount, ocr, structureTree });
+        lines, sizes, lineSizes, textItems: rows.length, imagePaintCount, vectorPaintCount, linkAnnotationCount, ocr, structureTree });
       page.cleanup();
       progress(Math.round((p / pdf.numPages) * 100));
     }
