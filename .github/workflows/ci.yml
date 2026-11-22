@@ -22,6 +22,8 @@ jobs:
       - run: npm run check
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - name: Validate real local Cloudflare Worker CSP and first-party OCR
+        run: npx playwright test --config=playwright.worker.config.ts
       - name: Upload browser screenshots and traces
         if: always()
         uses: actions/upload-artifact@v4
