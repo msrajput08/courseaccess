@@ -204,7 +204,7 @@ async function parseSpreadsheet(zip:JSZip):Promise<ImportedSection[]>{
         const ref=attr(cell,'r'),letters=ref.match(/^[A-Z]+/i)?.[0]||'';
         let index=0;for(const letter of letters.toUpperCase())index=index*26+(letter.charCodeAt(0)-64);
         const col=Math.max(0,index-1);
-        if(col>=128)continue;
+        if(col>=128)throw new Error('Worksheet exceeds 128 supported columns. Split wide worksheets instead of silently omitting cells.');
         values[col]=excelValue(cell,shared);
         maxCol=Math.max(maxCol,col+1);
       }
@@ -244,7 +244,9 @@ function odfBlocks(container:Element,label:string):ImportedSection{
       for(const listItem of elementChildren(element,'list-item'))
         for(const child of elementChildren(listItem))handle(child,true);
     }else if(name==='table'){
-      const rows=elementChildren(element,'table-row').slice(0,200).map(row=>{
+      const sourceRows=elementChildren(element,'table-row');
+      if(sourceRows.length>200)throw new Error('OpenDocument table exceeds 200 supported rows. Split the table instead of omitting rows.');
+      const rows=sourceRows.map(row=>{
         const result:string[]=[];
         for(const cell of elementChildren(row).filter(e=>e.localName==='table-cell'||e.localName==='covered-table-cell')){
           const times=Math.min(16,Number(attr(cell,'number-columns-repeated')||1)||1);
@@ -290,8 +292,11 @@ function htmlBlocks(body:Element):SourceBlock[]{
     if(name==='p'||name==='blockquote'){push(blocks,paragraph(textOf(node),name==='blockquote'?'blockquote':'paragraph'));return;}
     if(name==='li'){push(blocks,paragraph(textOf(node),'list'));return;}
     if(name==='table'){
-      const rows=descendants(node,'tr').slice(0,200).map(row=>
-        elementChildren(row).filter(e=>e.localName==='td'||e.localName==='th').map(textOf).slice(0,16));
+      const sourceRows=descendants(node,'tr');
+      if(sourceRows.length>200)throw new Error('HTML table exceeds 200 supported rows. Split the table instead of omitting rows.');
+      const rows=sourceRows.map(row=>
+        elementChildren(row).filter(e=>e.localName==='td'||e.localName==='th').map(textOf));
+      if(rows.some(r=>r.length>16))throw new Error('HTML table exceeds 16 supported columns. Split the table instead of omitting cells.');
       if(rows.length>=2&&rows[0].length>=2&&rows.every(r=>r.length===rows[0].length))
         push(blocks,paragraph(rows.map(row=>row.join('\t')).join('\n'),'table',{
           description:textOf(first(node,'caption')||node).slice(0,150)}));
