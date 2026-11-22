@@ -42,3 +42,7 @@ This change also tests Office source order and prevents silent paragraph/table c
 ## Runtime provider-independence improvement
 
 Tesseract worker/core and five OCR language packs are now included as first-party static build assets. This removes a runtime requirement to access a third-party model CDN while preserving browser-local recognition. Network availability for first load and Cloudflare static delivery still matter. The build script fails if an OCR asset cannot be packaged under the Cloudflare 25 MiB/file cap. Browser regression checks are necessary but not a substitute for production load/performance benchmarking.
+
+### Vector and Office figure limitations
+
+The checker now inspects both PDF raster painting operations and PDF vector path construction/painting as **review prompts**. Lines, borders and decorations can generate a false-positive review reminder, while a complex figure can still escape heuristic detection. This is not image comprehension and does not infer accurate alt text. DOCX source image description metadata is copied into explicitly marked **source-provided, unverified** text for educators to review; the reading format does not pretend to reconstruct original image placement or figures.
