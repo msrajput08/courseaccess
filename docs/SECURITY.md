@@ -23,3 +23,11 @@ No authenticated sessions, credentials, organizations or usage records are persi
 ## First-party OCR asset boundary
 
 `scripts/vendor-ocr.mjs` copies Tesseract.js core variants, the browser Worker and a fixed set of `.traineddata.gz` language models into `public/ocr/` during `npm run build` or `npm run dev`. Files are built from installed npm packages, and build fails if a package or file is missing or an asset exceeds Cloudflare's 25 MiB individual static-file limit. These static files are served directly by Cloudflare Workers Static Assets (not the paid Worker handler). Inspect third-party npm license and model terms before production distribution. Model downloads are still network requests on first use, but now use only the application's own domain. No remote OCR inference service receives document content.
+
+## Optional account service security (not deployed)
+
+The Phase 3 feature branch includes WebAuthn passwordless registration/login using maintained signature verifiers, RP-ID and exact origin checks, user verification, five-minute single-use D1 challenges, 14-day opaque hashed-session cookies (`__Host-`, Secure, HttpOnly, SameSite=Lax), server-side same-origin JSON mutations, size caps, rate limits, revocation, backup credential enrollment and deletion. Organization endpoints require membership on every request. Roles are selected from server-side D1 records; the client cannot assert paid entitlements. D1 uniqueness protects the one-owner invariant. Account recovery after all passkeys are lost is not implemented; users must enroll more than one credential.
+
+**Production safety:** the service requires a real D1 binding, exact `COURSEACCESS_AUTH_ORIGIN` and `COURSEACCESS_ACCOUNTS_ENABLED=true`, all absent in the default deployed Wrangler config. Unprovisioned account routes return 503; no guest is silently granted a premium tier. No payment gateway or cloud document storage exists.
+
+This is application code and automated checks, *not* a third-party penetration test or proof of production-grade IAM. Before activation, independently review threat models, Cloudflare WAF/rate-limit settings, D1 transactions, backup and recovery, account deletion obligations, security headers, session expiry and passkey device compatibility.
