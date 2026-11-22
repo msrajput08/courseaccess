@@ -143,3 +143,52 @@ test('plain TXT, RTF and TSV are treated as readable documents, not PDFs',async(
     await expect(page.getByRole('region',{name:/Imported source content/})).toBeVisible();
   }
 });
+
+test('long XLSX table import keeps the final rows in the exported HTML instead of clipping the first block',async({page})=>{
+  const archive=new JSZip();
+  const rows=Array.from({length:150},(_,i)=>{
+    const n=i+1;
+    const detail='Course description '+n+' '+('x'.repeat(120));
+    return '<row r="'+n+'"><c r="A'+n+'" t="inlineStr"><is><t>Student '+n+'</t></is></c>'+
+      '<c r="B'+n+'" t="inlineStr"><is><t>'+detail+'</t></is></c></row>';
+  }).join('');
+  archive.file('xl/workbook.xml',workbookXml);
+  archive.file('xl/worksheets/sheet1.xml','<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+rows+'</sheetData></worksheet>');
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'long-course.xlsx',
+    buffer:await archive.generateAsync({type:'nodebuffer',compression:'DEFLATE'}),
+    mimeType:'application/octet-stream',
+  });
+  await expect(page.getByRole('heading',{name:'long-course.xlsx'})).toBeVisible({timeout:30000});
+  const pending=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export HTML'}).click();
+  const html=await readFile(await (await pending).path(),'utf8');
+  expect(html).toContain('Student 1');
+  expect(html).toContain('Student 150');
+  expect(html).toContain('Course description 150 '+('x'.repeat(120)));
+  expect((html.match(/<table>/g)||[]).length).toBeGreaterThan(1);
+});
+test('malformed CSV fails visibly before creating a truncated workspace',async({page})=>{
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'broken.csv',buffer:Buffer.from('Student,Grade\\n"Taylor"x,95'),
+    mimeType:'text/csv',
+  });
+  await expect(page.getByRole('alert')).toContainText(/closing quote/i);
+  await expect(page.getByRole('heading',{name:'broken.csv'})).toHaveCount(0);
+});
+test('oversized Word paragraph is rejected explicitly, never silently cut',async({page})=>{
+  const zip=new JSZip();
+  const word='<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>'+
+    'X'.repeat(12_100)+'</w:t></w:r></w:p></w:body></w:document>';
+  zip.file('word/document.xml',word);
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'oversized-paragraph.docx',
+    buffer:await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'}),
+    mimeType:'application/octet-stream',
+  });
+  await expect(page.getByRole('alert')).toContainText(/12,000 characters/i);
+  await expect(page.getByRole('heading',{name:'oversized-paragraph.docx'})).toHaveCount(0);
+});
