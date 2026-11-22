@@ -94,3 +94,9 @@ First-use OCR downloads its browser worker, WASM core and selected language pack
 ### Worker security regression
 
 PR CI now includes an isolated local Cloudflare Worker browser gate (`npx playwright test --config=playwright.worker.config.ts`) so restrictive production CSP, OCR assets and real PDF import/export are tested together in addition to Vite browser tests. This is local runtime coverage, not proof of post-deployment compatibility on every browser.
+
+## Optional passkey accounts (development branch)
+
+The Phase 3 branch now includes a real, disabled-by-default account service: passkeys/WebAuthn, hashed sessions, member-scoped institutional roles and deletion. It is served only when a verified HTTPS origin, a migrated Cloudflare D1 binding and `COURSEACCESS_ACCOUNTS_ENABLED=true` are explicitly configured. The current public deployment is still a local, account-free document checker. The `/account` page explains this gracefully when D1 is absent. No premium checkout or hosted documents exist.
+
+Use `npm run test:auth:worker` for real local D1 passkey virtual-authenticator tests, and `docs/PREBILLING.md` for production provisioning. Never use the fixture D1 identifier from `wrangler.auth.test.jsonc` in production. Full independent assistive-technology/user-document review remains a launch gate.
