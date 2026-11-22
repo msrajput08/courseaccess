@@ -12,6 +12,7 @@ export interface Database {
 export interface AccountEnv {
   DB?:Database;
   COURSEACCESS_AUTH_ORIGIN?:string;
+  COURSEACCESS_ACCOUNTS_ENABLED?:string;
 }
 export class ApiError extends Error {
   constructor(public status:number,message:string){super(message);}
@@ -24,7 +25,7 @@ export const responseJSON=(body:unknown,status=200,extras:Record<string,string>=
     ...extras,
   }});
 export function activeAccountService(req:Request,env:AccountEnv):boolean {
-  if(!env.DB||!env.COURSEACCESS_AUTH_ORIGIN)return false;
+  if(env.COURSEACCESS_ACCOUNTS_ENABLED!=='true'||!env.DB||!env.COURSEACCESS_AUTH_ORIGIN)return false;
   const origin=env.COURSEACCESS_AUTH_ORIGIN;
   try {
     const url=new URL(origin);
