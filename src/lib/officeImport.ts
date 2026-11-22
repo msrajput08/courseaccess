@@ -329,9 +329,11 @@ function odfBlocks(container:Element,label:string):ImportedSection{
       const rows=sourceRows.map(row=>{
         const result:string[]=[];
         for(const cell of elementChildren(row).filter(e=>e.localName==='table-cell'||e.localName==='covered-table-cell')){
-          const times=Math.min(16,Number(attr(cell,'number-columns-repeated')||1)||1);
+          const times=Number(attr(cell,'number-columns-repeated')||1);
+          if(!Number.isInteger(times)||times<1||times>16||result.length+times>16)
+            throw new Error('OpenDocument row exceeds 16 supported columns. Split wide source tables rather than omitting cells.');
           const text=descendants(cell,'p').map(textOf).filter(Boolean).join(' ');
-          for(let i=0;i<times&&result.length<16;i++)result.push(text);
+          for(let i=0;i<times;i++)result.push(text);
         }
         return result;
       });
