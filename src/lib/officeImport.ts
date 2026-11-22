@@ -6,6 +6,9 @@ export type SourceBlock=Pick<EditableBlock,'kind'|'text'|'headingLevel'|'descrip
 export interface ImportedSection {label:string;blocks:SourceBlock[];imageCount:number;notes?:string[]}
 
 const MAX_ENTRIES=2500,MAX_XML_BYTES=12_000_000,MAX_UNPACKED=64_000_000,MAX_SECTIONS=80;
+const WORD_NS='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const DRAWING_NS='http://schemas.openxmlformats.org/drawingml/2006/main';
+
 const paragraph=(text:string,kind:SourceBlock['kind']='paragraph',extra:Partial<SourceBlock>={}):SourceBlock=>{
   const content=text.trim();
   if(content.length>12_000)throw new Error('A document content block exceeds 12,000 characters. Split the source instead of silently losing content.');
@@ -33,9 +36,9 @@ function wordText(node:Element):string {
   const walk=(n:Node)=>{
     if(n.nodeType!==1)return;
     const e=n as Element;
-    if(e.localName==='t' && e.prefix==='w'){output+=e.textContent||'';return;}
-    if(e.localName==='tab' && e.prefix==='w'){output+='\t';return;}
-    if(e.localName==='br' && e.prefix==='w'){output+='\n';return;}
+    if(e.localName==='t' && e.namespaceURI===WORD_NS){output+=e.textContent||'';return;}
+    if(e.localName==='tab' && e.namespaceURI===WORD_NS){output+='\t';return;}
+    if(e.localName==='br' && e.namespaceURI===WORD_NS){output+='\n';return;}
     for(const child of Array.from(e.childNodes))walk(child);
   };
   walk(node);
@@ -95,6 +98,51 @@ const filesIn=(zip:JSZip,regex:RegExp)=>Object.keys(zip.files).filter(p=>regex.t
   const num=(v:string)=>Number(v.match(/(\d+)(?:\.\w+)$/)?.[1]||0);
   return num(a)-num(b)||a.localeCompare(b);
 });
+/** Resolve an Open Packaging Convention relative target without allowing archive traversal. */
+export function archiveTarget(sourcePart:string,target:string):string {
+  if(!target || /[\?#\\]/.test(target) || /^[a-z][a-z0-9+.-]*:/i.test(target))
+    throw new Error('Unsupported external or unsafe document relationship target.');
+  let decoded:string;
+  try{decoded=decodeURIComponent(target);}
+  catch{throw new Error('Malformed document relationship target.');}
+  if(/[\?#\\]/.test(decoded)||/^[a-z][a-z0-9+.-]*:/i.test(decoded))
+    throw new Error('Unsafe document relationship target.');
+  const parts=(decoded.startsWith('/')?decoded.slice(1):sourcePart.slice(0,sourcePart.lastIndexOf('/')+1)+decoded).split('/');
+  const normalized:string[]=[];
+  for(const segment of parts){
+    if(!segment||segment==='.')continue;
+    if(segment==='..'){
+      if(!normalized.length)throw new Error('Document relationship escapes the archive root.');
+      normalized.pop();continue;
+    }
+    if(segment.includes('\0'))throw new Error('Unsafe document relationship path.');
+    normalized.push(segment);
+  }
+  if(!normalized.length)throw new Error('Empty document relationship target.');
+  return normalized.join('/');
+}
+function relationships(zip:JSZip,part:string,xml:string):Map<string,string> {
+  const location=part.slice(0,part.lastIndexOf('/')+1)+'_rels/'+part.slice(part.lastIndexOf('/')+1)+'.rels';
+  const rels=zip.file(location);
+  if(!rels)return new Map();
+  // Value is loaded by caller so all XML errors use the same safe XML parser.
+  const xmlDocument=parseXml(xml);
+  const map=new Map<string,string>();
+  for(const rel of descendants(xmlDocument,'Relationship')){
+    const id=attr(rel,'Id');
+    if(!id || map.has(id))throw new Error('Invalid or duplicated document relationship ID.');
+    if(attr(rel,'TargetMode').toLowerCase()==='external')continue;
+    const target=attr(rel,'Target');
+    map.set(id,archiveTarget(part,target));
+  }
+  return map;
+}
+async function readRelationships(zip:JSZip,part:string):Promise<Map<string,string>|null>{
+  const location=part.slice(0,part.lastIndexOf('/')+1)+'_rels/'+part.slice(part.lastIndexOf('/')+1)+'.rels';
+  if(!zip.file(location))return null;
+  return relationships(zip,part,await readZip(zip,location));
+}
+
 function parseWord(doc:Document):ImportedSection[]{
   const body=first(doc,'body');
   if(!body)throw new Error('The Word document has no body.');
@@ -136,9 +184,9 @@ function pptShapes(doc:Document,label:string):ImportedSection{
     if(child.localName==='sp'){
       const placeholder=first(child,'ph');
       const role=attr(placeholder,'type');
-      const paragraphs=descendants(child,'p').filter(p=>p.prefix==='a');
+      const paragraphs=descendants(child,'p').filter(p=>p.namespaceURI===DRAWING_NS);
       for(const p of paragraphs){
-        const value=descendants(p,'t').filter(n=>n.prefix==='a').map(textOf).join(' ').trim();
+        const value=descendants(p,'t').filter(n=>n.namespaceURI===DRAWING_NS).map(textOf).join(' ').trim();
         if(!value)continue;
         const isTitle=/title/i.test(role);
         const list=Boolean(first(p,'buChar')||first(p,'buAutoNum'));
@@ -155,7 +203,7 @@ function pptShapes(doc:Document,label:string):ImportedSection{
         else for(const row of rows)push(blocks,paragraph(row.join(' | ')));
       }
     }else if(child.localName==='grpSp'){
-      for(const p of descendants(child,'p').filter(n=>n.prefix==='a')){
+      for(const p of descendants(child,'p').filter(n=>n.namespaceURI===DRAWING_NS)){
         const value=descendants(p,'t').map(textOf).join(' ');
         push(blocks,paragraph(value));
       }
@@ -167,8 +215,26 @@ function pptShapes(doc:Document,label:string):ImportedSection{
   return {label,blocks,imageCount};
 }
 async function parsePresentation(zip:JSZip):Promise<ImportedSection[]> {
-  const slides=filesIn(zip,/^ppt\/slides\/slide\d+\.xml$/);
+  let slides=filesIn(zip,/^ppt\/slides\/slide\d+\.xml$/);
   if(!slides.length)throw new Error('No presentation slides were found.');
+  const present=await readZip(zip,'ppt/presentation.xml',false);
+  if(present){
+    const doc=parseXml(present);
+    const ids=descendants(doc,'sldId');
+    if(ids.length){
+      const rels=await readRelationships(zip,'ppt/presentation.xml');
+      if(!rels)throw new Error('PowerPoint slide order relationships are missing.');
+      slides=ids.map(slide=>{
+        const id=attr(slide,'id')||slide.getAttribute('r:id')||'';
+        const target=rels.get(id);
+        if(!target || !/^ppt\/slides\/[^/]+\.xml$/.test(target) || !zip.file(target))
+          throw new Error('PowerPoint slide order contains a missing or invalid slide relationship.');
+        return target;
+      });
+      if(new Set(slides).size!==slides.length)throw new Error('PowerPoint contains duplicate slide relationships.');
+    }
+  }
+  if(slides.length>MAX_SECTIONS)throw new Error('Presentation exceeds 80 supported slides.');
   const sections:ImportedSection[]=[];
   for(let i=0;i<slides.length;i++){
     sections.push(pptShapes(parseXml(await readZip(zip,slides[i])),'Slide '+(i+1)));
@@ -188,10 +254,23 @@ function excelValue(cell:Element,shared:string[]):string{
 async function parseSpreadsheet(zip:JSZip):Promise<ImportedSection[]>{
   const strings=await readZip(zip,'xl/sharedStrings.xml',false);
   const shared=strings?descendants(parseXml(strings),'si').map(si=>descendants(si,'t').map(textOf).join('')):[];
-  const sheets=filesIn(zip,/^xl\/worksheets\/sheet\d+\.xml$/);
+  let sheets=filesIn(zip,/^xl\/worksheets\/sheet\d+\.xml$/);
   if(!sheets.length)throw new Error('No Excel worksheets were found.');
   const workbook=await readZip(zip,'xl/workbook.xml',false);
-  const names=workbook?descendants(parseXml(workbook),'sheet').map(s=>attr(s,'name')):[];
+  const sheetNodes=workbook?descendants(parseXml(workbook),'sheet'):[];
+  const names=sheetNodes.map(s=>attr(s,'name'));
+  if(sheetNodes.some(s=>s.getAttribute('r:id'))){
+    const rels=await readRelationships(zip,'xl/workbook.xml');
+    if(!rels)throw new Error('Excel worksheet order relationships are missing.');
+    sheets=sheetNodes.map(s=>{
+      const target=rels.get(s.getAttribute('r:id')||'');
+      if(!target || !/^xl\/worksheets\/[^/]+\.xml$/.test(target) || !zip.file(target))
+        throw new Error('Workbook contains a missing or invalid worksheet relationship.');
+      return target;
+    });
+    if(new Set(sheets).size!==sheets.length)throw new Error('Workbook repeats a worksheet relationship.');
+  }
+  if(sheets.length>MAX_SECTIONS)throw new Error('Workbook exceeds 80 supported sheets.');
   const result:ImportedSection[]=[];
   for(let i=0;i<sheets.length;i++){
     const doc=parseXml(await readZip(zip,sheets[i]));
@@ -314,12 +393,40 @@ export function parseHtmlContent(html:string):SourceBlock[]{
   return htmlBlocks(container);
 }
 async function parseEpub(zip:JSZip):Promise<ImportedSection[]>{
-  const chapters=Object.keys(zip.files).filter(p=>/\.(xhtml|html|htm)$/i.test(p)&&
+  let chapters=Object.keys(zip.files).filter(p=>/\.(xhtml|html|htm)$/i.test(p)&&
     !/(nav|toc|cover)\.(xhtml|html|htm)$/i.test(p)).sort();
+  const container=await readZip(zip,'META-INF/container.xml',false);
+  if(container){
+    const root=first(parseXml(container),'rootfile');
+    const opfPath=attr(root,'full-path');
+    if(!opfPath || !zip.file(opfPath))throw new Error('EPUB package document is missing.');
+    const packageDoc=parseXml(await readZip(zip,opfPath));
+    const manifest=first(packageDoc,'manifest'),spine=first(packageDoc,'spine');
+    if(!manifest||!spine)throw new Error('EPUB manifest or reading spine is missing.');
+    const entries=new Map<string,string>();
+    for(const item of elementChildren(manifest,'item')){
+      const id=attr(item,'id'),href=attr(item,'href');
+      const media=attr(item,'media-type');
+      if(!id||!href)throw new Error('EPUB manifest includes an incomplete content item.');
+      if(media==='application/xhtml+xml'||media==='text/html'){
+        const target=archiveTarget(opfPath,href);
+        if(!zip.file(target))throw new Error('EPUB spine chapter is missing: '+href);
+        entries.set(id,target);
+      }
+    }
+    chapters=elementChildren(spine,'itemref').map(item=>{
+      const id=attr(item,'idref');
+      if(!id||!entries.has(id))throw new Error('EPUB spine references an unavailable readable chapter.');
+      return entries.get(id)!;
+    });
+    if(new Set(chapters).size!==chapters.length)throw new Error('EPUB spine repeats a chapter unexpectedly.');
+  }
   if(!chapters.length)throw new Error('No readable EPUB chapters found. This may be a DRM-protected book.');
+  if(chapters.length>MAX_SECTIONS)throw new Error('EPUB exceeds 80 supported spine chapters.');
   const results:ImportedSection[]=[];
   for(let i=0;i<chapters.length;i++){
-    const blocks=parseHtmlContent(await readZip(zip,chapters[i]));
+    const html=await readZip(zip,chapters[i]);
+    const blocks=parseHtmlContent(html);
     results.push(...partition('Chapter '+(i+1),blocks));
   }
   return ensureSections(results);
