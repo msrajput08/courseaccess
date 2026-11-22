@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import {test,expect,type Page} from '@playwright/test';
 
 async function virtualPasskey(page:Page):Promise<void>{
@@ -25,6 +26,8 @@ async function register(page:Page,name:string):Promise<string>{
 }
 test('passkey registration, login, session cookie and verified account deletion',async({page})=>{
   await register(page,'Accessibility Lecturer');
+  const accessibility=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze();
+  expect(accessibility.violations.map(v=>({id:v.id,impact:v.impact,nodes:v.nodes.length}))).toEqual([]);
   const first=await page.request.get('/api/auth/me');
   expect(first.headers()['cache-control']).toBe('no-store');
   const cookie=page.context().cookies();
