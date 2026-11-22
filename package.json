@@ -27,7 +27,9 @@
     "tesseract.js": "^7.0.0",
     "@fontsource/noto-sans": "^5.2.7",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "@fontsource/dm-sans": "^5.2.7",
+    "@fontsource/dm-serif-display": "^5.2.7"
   },
   "devDependencies": {
     "@types/node": "^22.18.6",
