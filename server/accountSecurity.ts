@@ -98,9 +98,15 @@ export async function rateLimit(db:Database,req:Request,action:string,limit=50):
   const record=await db.prepare('SELECT hits FROM auth_rate_limits WHERE bucket=?').bind(key).first<{hits:number}>();
   if(!record||record.hits>limit)throw new ApiError(429,'Too many requests. Try again later.');
 }
-export function dbKey(value:unknown):Uint8Array{
-  if(value instanceof ArrayBuffer)return new Uint8Array(value);
-  if(value instanceof Uint8Array)return value;
-  if(Array.isArray(value)&&value.every(x=>Number.isInteger(x)&&x>=0&&x<=255))return new Uint8Array(value as number[]);
-  throw new Error('Invalid stored credential key');
+export function dbKey(value:unknown):Uint8Array<ArrayBuffer>{
+  let bytes:Uint8Array;
+  if(value instanceof ArrayBuffer)bytes=new Uint8Array(value);
+  else if(value instanceof Uint8Array)bytes=value;
+  else if(Array.isArray(value)&&value.every(x=>Number.isInteger(x)&&x>=0&&x<=255))
+    bytes=new Uint8Array(value as number[]);
+  else throw new Error('Invalid stored credential key');
+  // SimpleWebAuthn expects ArrayBuffer-backed bytes; D1 can return a numeric BLOB array.
+  const key=new Uint8Array(new ArrayBuffer(bytes.length));
+  key.set(bytes);
+  return key;
 }
