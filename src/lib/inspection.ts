@@ -70,7 +70,8 @@ export function detectFindings(page: PageEvidence): Finding[] {
 export function createBlocks(page: PageEvidence): EditableBlock[] {
   const validSizes = page.sizes.filter((n) => Number.isFinite(n) && n > 0 && n < 250).sort((a, b) => a - b);
   const baseline = validSizes.length ? validSizes[Math.floor(validSizes.length / 2)] : 0;
-  const lines = page.lines.map((line, i) => ({ text: line.trim(), size: page.lineSizes?.[i] || 0 })).filter((line) => line.text).slice(0,400);
+  const lines = page.lines.map((line, i) => ({ text: line.trim(), size: page.lineSizes?.[i] || 0 })).filter((line) => line.text);
+  if(lines.length>400)throw new Error('PDF page exceeds the 400-line safe reading-draft limit; split the source rather than exporting incomplete content.');
   const result: EditableBlock[] = [];
   for(let i=0;i<lines.length;) {
     const table=detectTableRows(lines.map(line=>line.text),i);
