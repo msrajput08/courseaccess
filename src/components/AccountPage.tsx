@@ -35,7 +35,12 @@ export default function AccountPage(){
   const [deletedOrgName,setDeletedOrgName]=useState('');
 
   const refresh=useCallback(async()=>{
-    const status=await requestJSON('/api/auth/status');
+    let status:Record<string,any>;
+    try{status=await requestJSON('/api/auth/status');}
+    catch{
+      // Vite preview/static hosting does not provide the Worker API.
+      setMe({enabled:false,authenticated:false});return;
+    }
     if(!status.enabled){setMe({enabled:false,authenticated:false});return;}
     setMe(await requestJSON('/api/auth/me') as unknown as AccountState);
   },[]);
@@ -83,26 +88,29 @@ export default function AccountPage(){
     await requestJSON('/api/organizations/'+activeOrg+'/members/'+memberId,{role},'PATCH');
     await loadMembers(activeOrg);
   },'Member role updated.');
-  const removeMember=(memberId:string)=>run(async()=>{
+  const removeMember=(memberId:string)=>{
     if(!window.confirm('Remove this member from the organization?'))return;
+    return run(async()=>{
     await requestJSON('/api/organizations/'+activeOrg+'/members/'+memberId,{},'DELETE');
     await loadMembers(activeOrg);
-  },'Member removed.');
-  const transfer=(memberId:string)=>run(async()=>{
+  },'Member removed.');};
+  const transfer=(memberId:string)=>{
     if(!window.confirm('Transfer ownership? You will become an admin and cannot undo this without the new owner.'))return;
+    return run(async()=>{
     await requestJSON('/api/organizations/'+activeOrg+'/transfer',{accountId:memberId});
     await loadMembers(activeOrg);
-  },'Organization ownership transferred.');
+  },'Organization ownership transferred.');};
   const deleteOrg=()=>run(async()=>{
     await requestJSON('/api/organizations/'+activeOrg+'/delete',{confirmName:deletedOrgName});
     setActiveOrg('');setMembers([]);setDeletedOrgName('');
   },'Organization deleted.');
-  const deleteAccount=()=>run(async()=>{
-    if(deletePhrase!=='DELETE MY ACCOUNT')throw new Error('Type the exact deletion phrase.');
+  const deleteAccount=()=>{
     if(!window.confirm('Permanently delete your account and organizations you own? This cannot be undone.'))return;
+    return run(async()=>{
+    if(deletePhrase!=='DELETE MY ACCOUNT')throw new Error('Type the exact deletion phrase.');
     await requestJSON('/api/auth/delete',{confirm:deletePhrase});
     setActiveOrg('');setMembers([]);setDeletePhrase('');
-  },'Your account has been deleted.');
+  },'Your account has been deleted.');};
   const logout=()=>run(async()=>{
     await requestJSON('/api/auth/logout',{});
     setActiveOrg('');setMembers([]);
