@@ -43,7 +43,7 @@ test('XLSX worksheet names and text follow workbook relationships',async({page})
   expect(html.indexOf('End of course')).toBeLessThan(html.indexOf('Chapter one'));
   // No silent association of a worksheet's rows with the wrong sheet.
   await expect(page.getByRole('region',{name:/Imported source content/})).toContainText('Summary');
-  await page.getByRole('button',{name:/Sheet 02/i}).click();
+  await page.getByRole('button',{name:/Introduction/i}).click();
   await expect(page.getByRole('region',{name:/Imported source content/})).toContainText('Introduction');
 });
 test('EPUB reading chapters follow OPF spine rather than alphabetical archive paths',async({page})=>{
