@@ -12,3 +12,4 @@ CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_window ON auth_rate_limits(windo
 -- Prevent writes to security-sensitive session/credential tables by application guests.
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at_ms);
 CREATE INDEX IF NOT EXISTS idx_passkeys_last_used ON passkey_credentials(last_used_at_ms);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_organization_one_owner ON organization_members(organization_id) WHERE role = 'owner';
