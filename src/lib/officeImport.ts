@@ -326,17 +326,30 @@ function odfBlocks(container:Element,label:string):ImportedSection{
     }else if(name==='table'){
       const sourceRows=elementChildren(element,'table-row');
       if(sourceRows.length>200)throw new Error('OpenDocument table exceeds 200 supported rows. Split the table instead of omitting rows.');
-      const rows=sourceRows.map(row=>{
+      const rows:string[][]=[];
+      for(const row of sourceRows){
         const result:string[]=[];
         for(const cell of elementChildren(row).filter(e=>e.localName==='table-cell'||e.localName==='covered-table-cell')){
           const times=Number(attr(cell,'number-columns-repeated')||1);
           if(!Number.isInteger(times)||times<1||times>16||result.length+times>16)
             throw new Error('OpenDocument row exceeds 16 supported columns. Split wide source tables rather than omitting cells.');
-          const text=descendants(cell,'p').map(textOf).filter(Boolean).join(' ');
-          for(let i=0;i<times;i++)result.push(text);
+          const colspan=Number(attr(cell,'number-columns-spanned')||1);
+          const rowspan=Number(attr(cell,'number-rows-spanned')||1);
+          if(colspan!==1||rowspan!==1||cell.localName==='covered-table-cell')
+            throw new Error('Merged OpenDocument table cells require source editing before accurate accessible export.');
+          const content=descendants(cell,'p').map(textOf).filter(Boolean).join(' ');
+          for(let i=0;i<times;i++)result.push(content);
         }
-        return result;
-      });
+        const repeated=Number(attr(row,'number-rows-repeated')||1);
+        if(!Number.isSafeInteger(repeated)||repeated<1)
+          throw new Error('Invalid repeated OpenDocument row count.');
+        // ODF authors frequently compress millions of entirely empty formatting rows.
+        // Skip truly blank rows; only material content is represented in reading copies.
+        if(!result.some(value=>value.trim()))continue;
+        if(repeated>200||rows.length+repeated>200)
+          throw new Error('OpenDocument table exceeds 200 content rows after expanding repeated rows.');
+        for(let i=0;i<repeated;i++)rows.push([...result]);
+      }
       if(rows.length>=2&&rows[0].length>=2&&rows.every(r=>r.length===rows[0].length))
         push(blocks,paragraph(rows.map(row=>row.join('\t')).join('\n'),'table',{description:'Table in '+label}));
       else for(const row of rows)push(blocks,paragraph(row.join(' | ')));
@@ -365,23 +378,37 @@ async function parseOdf(zip:JSZip,format:DocumentFormat):Promise<ImportedSection
 }
 function htmlBlocks(body:Element):SourceBlock[]{
   const blocks:SourceBlock[]=[];
+  const ignored=new Set(['script','style','noscript','iframe','svg','nav','head','template']);
+  const visibleText=(node:Node):string=>{
+    const visit=(current:Node):string=>{
+      if(current.nodeType===3)return current.textContent||'';
+      if(current.nodeType!==1)return '';
+      const element=current as Element,tag=element.localName.toLowerCase();
+      if(ignored.has(tag)||element.hasAttribute('hidden')||element.getAttribute('aria-hidden')==='true'||
+        /(?:^|;)\\s*(?:display\\s*:\\s*none|visibility\\s*:\\s*hidden)/i.test(element.getAttribute('style')||''))return '';
+      return Array.from(element.childNodes).map(visit).join('');
+    };
+    return visit(node).replace(/\\s+/g,' ').trim();
+  };
   const process=(node:Element)=>{
     const name=node.localName.toLowerCase();
-    if(['script','style','noscript','iframe','svg','nav','head','template'].includes(name))return;
+    if(ignored.has(name)||node.hasAttribute('hidden')||node.getAttribute('aria-hidden')==='true')return;
     if(/^h[1-6]$/.test(name)){
-      push(blocks,paragraph(textOf(node),'heading',{headingLevel:Math.min(4,Math.max(2,Number(name[1]))) as 2|3|4}));return;
+      push(blocks,paragraph(visibleText(node),'heading',{headingLevel:Math.min(4,Math.max(2,Number(name[1]))) as 2|3|4}));return;
     }
-    if(name==='p'||name==='blockquote'){push(blocks,paragraph(textOf(node),name==='blockquote'?'blockquote':'paragraph'));return;}
-    if(name==='li'){push(blocks,paragraph(textOf(node),'list'));return;}
+    if(name==='p'||name==='blockquote'){push(blocks,paragraph(visibleText(node),name==='blockquote'?'blockquote':'paragraph'));return;}
+    if(name==='li'){push(blocks,paragraph(visibleText(node),'list'));return;}
     if(name==='table'){
+      if(descendants(node,'td').concat(descendants(node,'th')).some(cell=>Number(cell.getAttribute('colspan')||1)!==1||Number(cell.getAttribute('rowspan')||1)!==1))
+        throw new Error('Merged HTML table cells require source editing before accurate accessible export.');
       const sourceRows=descendants(node,'tr');
       if(sourceRows.length>200)throw new Error('HTML table exceeds 200 supported rows. Split the table instead of omitting rows.');
       const rows=sourceRows.map(row=>
-        elementChildren(row).filter(e=>e.localName==='td'||e.localName==='th').map(textOf));
+        elementChildren(row).filter(e=>e.localName==='td'||e.localName==='th').map(visibleText));
       if(rows.some(r=>r.length>16))throw new Error('HTML table exceeds 16 supported columns. Split the table instead of omitting cells.');
       if(rows.length>=2&&rows[0].length>=2&&rows.every(r=>r.length===rows[0].length))
         push(blocks,paragraph(rows.map(row=>row.join('\t')).join('\n'),'table',{
-          description:textOf(first(node,'caption')||node).slice(0,150)}));
+          description:visibleText(first(node,'caption')||node).slice(0,150)}));
       else for(const row of rows)push(blocks,paragraph(row.join(' | ')));
       return;
     }
