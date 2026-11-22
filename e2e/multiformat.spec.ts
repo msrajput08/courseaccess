@@ -172,7 +172,7 @@ test('long XLSX table import keeps the final rows in the exported HTML instead o
 test('malformed CSV fails visibly before creating a truncated workspace',async({page})=>{
   await page.goto('/checker');
   await page.locator('input[type=file]').setInputFiles({
-    name:'broken.csv',buffer:Buffer.from('Student,Grade\\n"Taylor"x,95'),
+    name:'broken.csv',buffer:Buffer.from('Student,Grade\n"Taylor"x,95'),
     mimeType:'text/csv',
   });
   await expect(page.getByRole('alert')).toContainText(/closing quote/i);
