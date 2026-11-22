@@ -34,3 +34,10 @@ Payment gateway integration is intentionally **last**, but these unfinished pre-
 - [ ] Independent production deployment verification on final canonical domain and operator approval.
 
 All payment/provider/billing activation remains deferred.
+
+## Current integration evidence
+
+- [x] License-clear original academic DOCX/PPTX/PDF sources plus valid XLSX/EPUB/ODS authored-package samples generated reproducibly in CI.
+- [x] Source-to-export text coverage, editable figure-alt provenance, vector diagram review cues and tagged PDF reimport have automated regressions.
+- [ ] Real externally authored institutional source/target comparisons and documented manual accessibility acceptance remain required.
+- [ ] Real screen-reader sessions and owner-reviewed privacy/security evidence remain required.
