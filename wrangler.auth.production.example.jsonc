@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "courseaccess",
+  "main": "server/index.ts",
+  "compatibility_date": "2026-11-20",
+  "vars": {
+    "COURSEACCESS_AUTH_ORIGIN": "https://courseaccess.minty-12-shar.workers.dev",
+    "COURSEACCESS_ACCOUNTS_ENABLED": "false"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "courseaccess-primary",
+    "database_id": "REPLACE_WITH_REAL_OWNER_PROVISIONED_D1_ID",
+    "migrations_dir": "migrations"
+  }],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/*","!/assets/*","!/ocr/*"]
+  },
+  "observability": {"enabled": false}
+}
