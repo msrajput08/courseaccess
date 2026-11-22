@@ -21,3 +21,16 @@
 - [ ] Confirm user-approved merge and deploy; run independent production smoke and accessible-export verification.
 
 Payment gateway integration is intentionally **last**, but these unfinished pre-payment gates cannot be described as complete merely because code migrations and synthetic fixtures exist.
+
+### Optional account implementation status (22 November 2026)
+
+- [x] Code for origin-validated passkey register/login, backup keys, hashed sessions, logout and account deletion in a feature PR.
+- [x] Server-owned organization roles, member-scoped reads and mutations, ownership transfer and delete endpoints.
+- [x] Default production service fails closed without D1, exact verified origin and explicit enable flag.
+- [ ] Real owner-controlled Cloudflare D1 created/bound/migrated with independently verified backup.
+- [ ] Independent security review and real-device passkey/account recovery usability validation.
+- [ ] NVDA, VoiceOver, TalkBack and keyboard walkthrough evidence; see `docs/ASSISTIVE_TECH_MATRIX.md`.
+- [ ] A license-cleared source/output corpus across PDF, DOCX, XLSX, PPTX, EPUB and OpenDocument with tracked findings.
+- [ ] Independent production deployment verification on final canonical domain and operator approval.
+
+All payment/provider/billing activation remains deferred.
