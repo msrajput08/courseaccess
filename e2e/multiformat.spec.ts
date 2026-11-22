@@ -192,3 +192,83 @@ test('oversized Word paragraph is rejected explicitly, never silently cut',async
   await expect(page.getByRole('alert')).toContainText(/12,000 characters/i);
   await expect(page.getByRole('heading',{name:'oversized-paragraph.docx'})).toHaveCount(0);
 });
+
+
+test('OpenDocument repeated nonempty table rows survive in semantic HTML, excluding empty formatting rows',async({page})=>{
+  const zip=new JSZip();
+  zip.file('content.xml', '<?xml version="1.0"?>'+
+    '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '+
+    'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" '+
+    'xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">'+
+    '<office:body><office:spreadsheet><table:table table:name="Attendance">'+
+    '<table:table-row><table:table-cell><text:p>Student</text:p></table:table-cell>'+
+    '<table:table-cell><text:p>Attended</text:p></table:table-cell></table:table-row>'+
+    '<table:table-row table:number-rows-repeated="3">'+
+    '<table:table-cell><text:p>Class A</text:p></table:table-cell>'+
+    '<table:table-cell><text:p>Yes</text:p></table:table-cell></table:table-row>'+
+    '<table:table-row table:number-rows-repeated="1000000">'+
+    '<table:table-cell/><table:table-cell/></table:table-row>'+
+    '</table:table></office:spreadsheet></office:body></office:document-content>');
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'attendance.ods',
+    buffer:await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'}),
+    mimeType:'application/octet-stream'
+  });
+  await expect(page.getByRole('heading',{name:'attendance.ods'})).toBeVisible({timeout:30000});
+  const download=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export HTML'}).click();
+  const html=await readFile(await (await download).path(),'utf8');
+  expect(html).toContain('<th scope="col">Student</th>');
+  expect((html.match(/<td>Class A<\/td>/g)||[]).length).toBe(3);
+  expect((html.match(/<td>Yes<\/td>/g)||[]).length).toBe(3);
+});
+test('OpenDocument repeated content beyond 200 rows fails visibly rather than dropping content',async({page})=>{
+  const zip=new JSZip();
+  zip.file('content.xml','<?xml version="1.0"?>'+
+    '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '+
+    'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" '+
+    'xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">'+
+    '<office:body><office:spreadsheet><table:table table:name="Oversized">'+
+    '<table:table-row table:number-rows-repeated="201">'+
+    '<table:table-cell><text:p>Data</text:p></table:table-cell>'+
+    '<table:table-cell><text:p>Retained</text:p></table:table-cell>'+
+    '</table:table-row></table:table></office:spreadsheet></office:body></office:document-content>');
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'oversized.ods',
+    buffer:await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'}),
+    mimeType:'application/octet-stream'
+  });
+  await expect(page.getByRole('alert')).toContainText(/200 content rows/i);
+  await expect(page.getByRole('heading',{name:'oversized.ods'})).toHaveCount(0);
+});
+test('HTML visible text excludes embedded script, style and intentionally hidden fragments',async({page})=>{
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'hidden-content.html',
+    mimeType:'text/html',
+    buffer:Buffer.from('<html><body><main><h2>Lecture notes</h2>'+
+      '<p>Visible <b>important</b> text<script>INJECTED_SCRIPT</script><span hidden>HIDDEN_PAYLOAD</span>'+
+      '<span aria-hidden="true">ARIA_HIDDEN</span><span style="display: none">CSS_HIDDEN</span>'+
+      '<style>.x{display:none} HIDDEN_CSS</style></p></main></body></html>')
+  });
+  await expect(page.getByRole('heading',{name:'hidden-content.html'})).toBeVisible();
+  const pending=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export HTML'}).click();
+  const html=await readFile(await (await pending).path(),'utf8');
+  expect(html).toContain('Visible important text');
+  for(const hidden of ['INJECTED_SCRIPT','HIDDEN_PAYLOAD','ARIA_HIDDEN','CSS_HIDDEN','HIDDEN_CSS'])
+    expect(html).not.toContain(hidden);
+});
+test('merged HTML tables reject invalid accessible header relationships',async({page})=>{
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'merged-table.html',
+    mimeType:'text/html',
+    buffer:Buffer.from('<main><table><tr><th colspan="2">Result</th></tr>'+
+      '<tr><td>Class</td><td>Score</td></tr></table></main>')
+  });
+  await expect(page.getByRole('alert')).toContainText(/Merged HTML table cells/i);
+  await expect(page.getByRole('heading',{name:'merged-table.html'})).toHaveCount(0);
+});
