@@ -42,3 +42,13 @@ These protections check **unsupported size conditions**, not semantic correctnes
 Modern PPTX imports use presentation.xml and its slide relationship file when supplied, instead of blindly sorting slide filenames. XLSX imports use workbook sheet IDs and worksheet relationships, preserving worksheet labels with the correct data. EPUB imports use the OPF manifest and reading spine, so alphabetical file paths cannot silently reorder chapters. Legacy incomplete synthetic packages still use a conservative file-order fallback; an invalid explicit relationship fails rather than making up a new reading order.
 
 Long CSV and XLSX tabular sections reproduce the original first-row column labels for every continuation table. Unique data rows are preserved in source order; continuation tables intentionally repeat headers for semantic accessibility. Unsupported overlong rows/individual paragraphs reject import with an actionable error rather than truncating content. Unmanageable OpenDocument repeated column counts are rejected instead of dropping cells.
+
+## Mathematics, notes, formula values and delimited-cell integrity
+
+The Word DOCX importer now retains referenced **footnote and endnote text** at the reference point in the reading copy. Missing note targets cause an explicit error. Merged/nested Word tables and unconvertible Office Math objects fail closed; pretending a flattened table or missing equation was a complete accessible document would be misleading. Source figure descriptions are presented as unverified material requiring review.
+
+The XLSX importer preserves a formula expression (`=AVERAGE(B2:B3)`) **and** its original stored cached result (`[cached result: 90]`). It does **not** recalculate formulae or perform numeric/date formatting. Shared-formula XML without a reconstructable expression and nonexistent shared string indices now cause an explicit error rather than deleting their meaning.
+
+CSV/TSV quoted multiline fields stay in their original logical table cell: internal line breaks are represented by Unicode U+2028 and internal literal tab characters by U+2003 to avoid creating fake rows or columns in the accessible reading table. Export is semantically readable, not byte-for-byte identical to the input's CSV serialization.
+
+Source-native Office layout, merged cells, unsafely nested tables and rich mathematical structures require source authoring work or a future specialist remediation engine. The importer deliberately refuses those unsafe representations.
