@@ -24,6 +24,16 @@ for(const sample of samples){
       name:sample.file,mimeType:'application/octet-stream',buffer:input,
     });
     await expect(page.getByRole('heading',{name:sample.file})).toBeVisible({timeout:40_000});
+    if(sample.file==='academic-handout.pdf'){
+      const evidence=page.waitForEvent('download');
+      await page.getByRole('button',{name:'Report JSON'}).click();
+      const report=JSON.parse(await readFile(await (await evidence).path(),'utf8')) as {
+        findings:Array<{title:string;category:string}>;
+        pages:Array<{vectorPaintCount?:number}>;
+      };
+      expect(report.pages.some(p=>(p.vectorPaintCount||0)>0)).toBe(true);
+      expect(report.findings.some(f=>f.title==='Review vector artwork and diagrams'&&f.category==='visual')).toBe(true);
+    }
     const started=page.waitForEvent('download');
     await page.getByRole('button',{name:'Export HTML'}).click();
     const download=await started;
