@@ -288,7 +288,9 @@ async function parsePresentation(zip:JSZip):Promise<ImportedSection[]> {
 }
 function excelValue(cell:Element,shared:string[]):string{
   const type=attr(cell,'t');
-  const raw=textOf(first(cell,'v')||cell);
+  // Missing cached results must not be confused with the formula expression.
+  const value=first(cell,'v');
+  const raw=value?textOf(value):'';
   const formula=first(cell,'f');
   if(formula){
     const expression=(formula.textContent||'').trim();
