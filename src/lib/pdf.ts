@@ -66,7 +66,7 @@ export async function inspectPdf(file: File, progress: (value: number) => void, 
       const vectorCodes=new Set<number>([
         pdfjs.OPS.stroke,pdfjs.OPS.closeStroke,pdfjs.OPS.fill,pdfjs.OPS.eoFill,
         pdfjs.OPS.fillStroke,pdfjs.OPS.eoFillStroke,pdfjs.OPS.closeFillStroke,
-        pdfjs.OPS.closeEOFillStroke,pdfjs.OPS.shadingFill,
+        pdfjs.OPS.closeEOFillStroke,pdfjs.OPS.shadingFill,pdfjs.OPS.constructPath,
       ]);
       const vectorPaintCount=ops.fnArray.filter(op=>vectorCodes.has(op)).length;
       let linkAnnotationCount: number | undefined;
