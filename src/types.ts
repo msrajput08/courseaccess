@@ -49,6 +49,7 @@ export interface PageInspection {
   text: string;
   textItemCount: number;
   imagePaintCount: number;
+  vectorPaintCount?: number;
   linkAnnotationCount?: number;
   ocr?: PageOcr;
   hasStructureTree: boolean | null;
