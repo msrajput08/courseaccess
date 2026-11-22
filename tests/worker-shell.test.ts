@@ -34,6 +34,12 @@ describe('Cloudflare navigation shell cache policy',()=>{
       expect(response.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
       expect(response.headers.get('cross-origin-resource-policy')).toBe('same-origin');
       expect(response.headers.get('permissions-policy')).toContain('camera=()');
+      const csp=response.headers.get('content-security-policy')||'';
+      expect(csp).toContain("default-src 'self'");
+      expect(csp).toContain("object-src 'none'");
+      expect(csp).toContain("worker-src 'self' blob:");
+      expect(csp).toContain("'wasm-unsafe-eval'");
+      expect(csp).not.toContain("'unsafe-eval'");
     }
   });
   it('does not turn hashed asset requests into HTML navigation shells',async()=>{
