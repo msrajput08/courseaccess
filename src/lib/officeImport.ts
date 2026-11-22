@@ -147,11 +147,38 @@ async function readRelationships(zip:JSZip,part:string):Promise<Map<string,strin
   return relationships(zip,part,await readZip(zip,location));
 }
 
-function parseWord(doc:Document):ImportedSection[]{
+async function wordNoteReferences(zip:JSZip,kind:'footnote'|'endnote'):Promise<Map<string,string>>{
+  const xml=await readZip(zip,'word/'+kind+'s.xml',false);
+  const notes=new Map<string,string>();
+  if(!xml)return notes;
+  const doc=parseXml(xml);
+  for(const note of descendants(doc,kind)){
+    const id=attr(note,'id');
+    if(!id||notes.has(id))throw new Error('Word notes contain missing or duplicated identifiers.');
+    if(descendants(note,'tbl').length||descendants(note,'drawing').length||descendants(note,'oMath').length)
+      throw new Error('A Word '+kind+' includes a complex table, drawing or formula that cannot be safely reconstructed.');
+    const paragraphs=descendants(note,'p').map(wordText).filter(Boolean);
+    if(paragraphs.length)notes.set(id,paragraphs.join(' '));
+  }
+  return notes;
+}
+function parseWord(doc:Document,footnotes:Map<string,string>,endnotes:Map<string,string>):ImportedSection[]{
   const body=first(doc,'body');
   if(!body)throw new Error('The Word document has no body.');
   const blocks:SourceBlock[]=[];
   let imageCount=0;
+  if(descendants(body,'oMath').length)throw new Error('This Word document contains Office Math formulas; lossless mathematical notation cannot be recovered by the current importer.');
+  const addReferencedNotes=(node:Element)=>{
+    for(const [kind,lookup] of [
+      ['footnote',footnotes],['endnote',endnotes],
+    ] as const){
+      for(const ref of descendants(node,kind+'Reference')){
+        const id=attr(ref,'id'),note=lookup.get(id);
+        if(!note)throw new Error('Word '+kind+' reference '+id+' could not be resolved without losing source content.');
+        push(blocks,paragraph((kind==='footnote'?'Footnote ':'Endnote ')+id+': '+note));
+      }
+    }
+  };
   const handle=(node:Element)=>{
     if(node.localName==='p'){
       imageCount+=descendants(node,'drawing').length+descendants(node,'pict').length;
@@ -166,6 +193,7 @@ function parseWord(doc:Document):ImportedSection[]{
       }
       for(const description of wordImageDescriptions(node))
         push(blocks,paragraph('Source image alternative text (verify): '+description));
+      addReferencedNotes(node);
     }else if(node.localName==='tbl'){
       const cells=directCells(node,'tr','tc');
       const merged=cells.some(row=>row.some(cell=>{
@@ -183,6 +211,7 @@ function parseWord(doc:Document):ImportedSection[]{
       imageCount+=descendants(node,'drawing').length;
       for(const description of wordImageDescriptions(node))
         push(blocks,paragraph('Source image alternative text (verify): '+description));
+      addReferencedNotes(node);
     }else if(node.localName==='sdt'){
       const content=first(node,'sdtContent');
       if(content)for(const child of elementChildren(content))handle(child);
@@ -490,7 +519,12 @@ async function parseEpub(zip:JSZip):Promise<ImportedSection[]>{
 }
 export async function importOfficeDocument(file:File,format:DocumentFormat):Promise<ImportedSection[]>{
   const zip=await loadOfficeZip(file);
-  if(format==='docx')return parseWord(parseXml(await readZip(zip,'word/document.xml')));
+  if(format==='docx'){
+    const [footnotes,endnotes]=await Promise.all([
+      wordNoteReferences(zip,'footnote'),wordNoteReferences(zip,'endnote'),
+    ]);
+    return parseWord(parseXml(await readZip(zip,'word/document.xml')),footnotes,endnotes);
+  }
   if(format==='pptx')return parsePresentation(zip);
   if(format==='xlsx')return parseSpreadsheet(zip);
   if(format==='odt'||format==='odp'||format==='ods')return parseOdf(zip,format);
