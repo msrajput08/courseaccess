@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import type {EditableBlock,DocumentFormat} from '../types';
-import {chunkDelimitedRows} from './tableChunks';
+import {chunkDelimitedRows,chunkTabularRows} from './tableChunks';
 
 export type SourceBlock=Pick<EditableBlock,'kind'|'text'|'headingLevel'|'description'>;
 export interface ImportedSection {label:string;blocks:SourceBlock[];imageCount:number;notes?:string[]}
@@ -296,10 +296,10 @@ async function parseSpreadsheet(zip:JSZip):Promise<ImportedSection[]>{
     for(let start=0;start<Math.max(1,maxCol);start+=16){
       const width=Math.min(16,maxCol-start);
       const columnRows=data.map(row=>Array.from({length:width},(_,k)=>row[start+k]||''));
-      for(const chunk of chunkDelimitedRows(columnRows)){
+      for(const chunk of (width>=2&&data.length>=2?chunkTabularRows(columnRows):chunkDelimitedRows(columnRows))){
         const windowRows=columnRows.slice(chunk.start,chunk.end);
         const blocks:SourceBlock[]=[];
-        if(width>=2&&windowRows.length>=2){
+        if(width>=2&&data.length>=2){
           push(blocks,paragraph(chunk.text,'table',{
             description:sheetName+' · rows '+(chunk.start+1)+'–'+chunk.end}));
         }else for(const row of windowRows)push(blocks,paragraph(row.join(' ')));
