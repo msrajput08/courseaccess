@@ -2,7 +2,7 @@ import type {DocumentFormat,EditableBlock,Finding,Inspection,OcrLanguage,PageIns
 import {PRODUCT} from '../config';
 import {detectDocumentFormat,ZIP_FORMATS,IMAGE_FORMATS} from './formats';
 import type {ImportedSection,SourceBlock} from './officeImport';
-import {chunkDelimitedRows} from './tableChunks';
+import {chunkDelimitedRows,chunkTabularRows} from './tableChunks';
 
 export interface DocumentImportOptions {
   automaticOcr?:boolean;
@@ -75,10 +75,9 @@ function textSections(text:string,format:DocumentFormat):ImportedSection[]{
     for(let col=0;col<cols;col+=16){
       const width=Math.min(16,cols-col);
       const columnRows=rows.map(row=>Array.from({length:width},(_,offset)=>row[col+offset]||''));
-      for(const chunk of chunkDelimitedRows(columnRows)){
-        const count=chunk.end-chunk.start;
+      for(const chunk of (width>=2&&rows.length>=2?chunkTabularRows(columnRows):chunkDelimitedRows(columnRows))){
         sections.push({label:'Data rows '+(chunk.start+1)+'–'+chunk.end,imageCount:0,
-          blocks:[semantic(count>=2&&width>=2?'table':'paragraph',chunk.text,{
+          blocks:[semantic(width>=2&&rows.length>=2?'table':'paragraph',chunk.text,{
             description:'Imported '+format.toUpperCase()+' data'})]});
       }
     }
