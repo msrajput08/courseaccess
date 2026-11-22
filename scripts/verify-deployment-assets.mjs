@@ -16,6 +16,9 @@ for(let attempt=1;attempt<=12;attempt++){
     if(!response.ok)throw Error('Navigation HTTP '+response.status);
     const cache=response.headers.get('cache-control')||'';
     if(!cache.includes('no-store'))throw Error('HTML navigation missing no-store caching policy: '+cache);
+    const csp=response.headers.get('content-security-policy')||'';
+    if(!csp.includes("default-src 'self'")||!csp.includes("object-src 'none'"))
+      throw Error('Production HTML is missing the restrictive CSP.');
     const html=await response.text();
     const modules=[...html.matchAll(scriptPattern)].map(x=>x[1]);
     const css=[...html.matchAll(cssPattern)].map(x=>x[1]).filter(x=>!x.startsWith('https://'));
@@ -27,7 +30,15 @@ for(let attempt=1;attempt<=12;attempt++){
         throw Error('Asset mismatch: '+uri+' responded '+asset.status+' '+contentType);
       }
     }
-    console.log('Deployment assets verified on attempt '+attempt+': '+modules.length+' JS + '+css.length+' stylesheets; HTML no-store policy active.');
+    // Assert that first-party OCR resources were published as real static assets
+    // and are never confused with the SPA HTML shell.
+    for(const uri of ['/ocr/worker.min.js','/ocr/lang/eng.traineddata.gz']){
+      const asset=await fetch(new URL(uri,origin),{method:'HEAD',headers:{'cache-control':'no-cache'}});
+      const type=asset.headers.get('content-type')||'';
+      if(!asset.ok||/text\/html/i.test(type))
+        throw Error('First-party OCR asset missing or served as HTML: '+uri+' -> '+asset.status+' '+type);
+    }
+    console.log('Deployment assets verified on attempt '+attempt+': '+modules.length+' JS + '+css.length+' stylesheets; CSP, HTML cache and OCR static resources verified.');
     process.exit(0);
   }catch(e){
     error=e;
