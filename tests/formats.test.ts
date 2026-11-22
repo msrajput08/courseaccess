@@ -2,7 +2,7 @@ import {describe,it,expect} from 'vitest';
 import {detectDocumentFormat,ZIP_FORMATS,sectionUnit} from '../src/lib/formats';
 import {parseDelimited} from '../src/lib/importDocument';
 import {safeStem} from '../src/lib/export';
-import {chunkDelimitedRows} from '../src/lib/tableChunks';
+import {chunkDelimitedRows,chunkTabularRows} from '../src/lib/tableChunks';
 describe('multiformat import safety and detection',()=>{
   it('supports common modern documents and rejects unknown files',()=>{
     expect(detectDocumentFormat('Course.DOCX')).toBe('docx');
@@ -49,6 +49,15 @@ describe('multiformat import safety and detection',()=>{
     expect(chunks[0].start).toBe(0);
     expect(chunks.at(-1)?.end).toBe(rows.length);
     expect(()=>chunkDelimitedRows([['x'.repeat(12_001)]])).toThrow(/row exceeds/i);
+  });
+  it('repeats the actual column headings for continued data tables',()=>{
+    const rows=[['Student','Score'],...Array.from({length:100},(_,i)=>['Learner '+i,String(i)])];
+    const chunks=chunkTabularRows(rows,15,300);
+    expect(chunks.length).toBeGreaterThan(2);
+    expect(chunks.every(c=>c.text.startsWith('Student\tScore\n'))).toBe(true);
+    const uniqueData=chunks.flatMap(c=>c.text.split('\n').slice(1));
+    expect(uniqueData).toEqual(rows.slice(1).map(row=>row.join('\t')));
+    expect(chunks.every(c=>c.text.length<=300)).toBe(true);
   });
   it('exports filenames from any imported source extension',()=>{
     expect(safeStem('Biology Lecture.docx')).toBe('Biology-Lecture');
