@@ -44,6 +44,10 @@ function wordText(node:Element):string {
   walk(node);
   return output.trim();
 }
+function wordImageDescriptions(node:Element):string[]{
+  return descendants(node,'docPr').map(element=>
+    element.getAttribute('descr')||element.getAttribute('title')||'').map(s=>s.trim()).filter(Boolean);
+}
 function push(b:SourceBlock[],block:SourceBlock){
   if(!block.text)return;
   if(b.length>=16000)throw new Error('Document exceeds 16,000 content elements. Split the source instead of silently losing content.');
@@ -152,13 +156,16 @@ function parseWord(doc:Document):ImportedSection[]{
     if(node.localName==='p'){
       imageCount+=descendants(node,'drawing').length+descendants(node,'pict').length;
       const value=wordText(node);
-      if(!value)return;
-      const pPr=elementChildren(node,'pPr')[0];
-      const style=attr(pPr?first(pPr,'pStyle'):null,'val');
-      const level=Number(style.match(/Heading(\d+)/i)?.[1]||0);
-      const list=Boolean(pPr&&(first(pPr,'numPr')||/^List/i.test(style)));
-      const kind:SourceBlock['kind']=list?'list':level||/^Title$/i.test(style)?'heading':'paragraph';
-      push(blocks,paragraph(value,kind,kind==='heading'?{headingLevel:(Math.min(4,Math.max(2,level||2)) as 2|3|4)}:{}));
+      if(value){
+        const pPr=elementChildren(node,'pPr')[0];
+        const style=attr(pPr?first(pPr,'pStyle'):null,'val');
+        const level=Number(style.match(/Heading(\d+)/i)?.[1]||0);
+        const list=Boolean(pPr&&(first(pPr,'numPr')||/^List/i.test(style)));
+        const kind:SourceBlock['kind']=list?'list':level||/^Title$/i.test(style)?'heading':'paragraph';
+        push(blocks,paragraph(value,kind,kind==='heading'?{headingLevel:(Math.min(4,Math.max(2,level||2)) as 2|3|4)}:{}));
+      }
+      for(const description of wordImageDescriptions(node))
+        push(blocks,paragraph('Source image alternative text (verify): '+description));
     }else if(node.localName==='tbl'){
       const rows=directCells(node,'tr','tc').map(row=>row.map(cell=>
         descendants(cell,'p').map(p=>wordText(p)).filter(Boolean).join(' ')));
@@ -167,6 +174,8 @@ function parseWord(doc:Document):ImportedSection[]{
         push(blocks,paragraph(rows.map(row=>row.join('\t')).join('\n'),'table',{description:'Imported table from Word'}));
       else for(const row of rows)push(blocks,paragraph(row.join(' | ')));
       imageCount+=descendants(node,'drawing').length;
+      for(const description of wordImageDescriptions(node))
+        push(blocks,paragraph('Source image alternative text (verify): '+description));
     }else if(node.localName==='sdt'){
       const content=first(node,'sdtContent');
       if(content)for(const child of elementChildren(content))handle(child);
