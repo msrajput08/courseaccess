@@ -57,6 +57,9 @@ async function createSession(db:Database,accountId:string,now=Date.now()):Promis
 async function issueChallenge(db:Database,purpose:Challenge['purpose'],
   nonce:string,accountId:string|null=null,name:string|null=null,challengeId=crypto.randomUUID()):Promise<string>{
   const now=Date.now();
+  // Expired pre-registration names and unused challenge nonces are removed on
+  // each new ceremony, avoiding indefinite retention of abandoned attempts.
+  await db.prepare('DELETE FROM auth_challenges WHERE expires_at_ms<?').bind(now).run();
   await db.prepare(
     'INSERT INTO auth_challenges(challenge_id,account_id,nonce,purpose,expires_at_ms,created_at_ms,pending_display_name) VALUES(?,?,?,?,?,?,?)'
   ).bind(challengeId,accountId,nonce,purpose,now+FLOW_SECONDS*1000,now,name).run();
@@ -122,6 +125,7 @@ async function finishSignup(req:Request,db:Database,rpID:string,origin:string):P
         credential.id,challenge.challenge_id,Array.from(credential.publicKey),credential.counter,now),
       db.prepare('INSERT INTO sessions(token_hash,account_id,issued_at_ms,expires_at_ms) VALUES(?,?,?,?)').bind(
         hash,challenge.challenge_id,now,now+SESSION_SECONDS*1000),
+      db.prepare('DELETE FROM auth_challenges WHERE challenge_id=?').bind(challenge.challenge_id),
     ]);
   }catch{throw new ApiError(409,'Account registration could not be completed. Please retry.');}
   return responseJSON({authenticated:true,account:{id:challenge.challenge_id,name:challenge.pending_display_name}},201,{
@@ -161,6 +165,7 @@ async function finishLogin(req:Request,db:Database,rpID:string,origin:string):Pr
       result.authenticationInfo.newCounter,now,row.credential_id),
     db.prepare('INSERT INTO sessions(token_hash,account_id,issued_at_ms,expires_at_ms) VALUES(?,?,?,?)').bind(
       hash,row.account_id,now,now+SESSION_SECONDS*1000),
+    db.prepare('DELETE FROM auth_challenges WHERE challenge_id=?').bind(challenge.challenge_id),
   ]);
   return responseJSON({authenticated:true},200,{
     'set-cookie':cookie(sessionCookie,secret,SESSION_SECONDS),
@@ -196,8 +201,11 @@ async function finishExtraPasskey(req:Request,db:Database,rpID:string,origin:str
   const credential=result.registrationInfo?.credential;
   if(!result.verified||!credential)throw new ApiError(400,'Passkey registration was not verified.');
   try{
-    await db.prepare('INSERT INTO passkey_credentials(credential_id,account_id,cose_public_key,sign_count,created_at_ms) VALUES(?,?,?,?,?)')
-      .bind(credential.id,identity.account_id,Array.from(credential.publicKey),credential.counter,Date.now()).run();
+    await db.batch([
+      db.prepare('INSERT INTO passkey_credentials(credential_id,account_id,cose_public_key,sign_count,created_at_ms) VALUES(?,?,?,?,?)')
+        .bind(credential.id,identity.account_id,Array.from(credential.publicKey),credential.counter,Date.now()),
+      db.prepare('DELETE FROM auth_challenges WHERE challenge_id=?').bind(challenge.challenge_id),
+    ]);
   }catch{throw new ApiError(409,'This passkey is already registered.');}
   return responseJSON({added:true},201,{'set-cookie':cookie(flowCookie,'',0)});
 }
