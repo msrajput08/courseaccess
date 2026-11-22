@@ -6,7 +6,22 @@ const navigationPaths=new Set(['/','/checker','/workspace','/pricing','/guides',
 function isAppNavigation(pathname:string):boolean {
   return navigationPaths.has(pathname)||pathname.startsWith('/guides/');
 }
+const contentSecurityPolicy=[
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "script-src 'self' 'wasm-unsafe-eval'",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+  "img-src 'self' data: blob:",
+  "media-src 'self' blob:",
+  "connect-src 'self'",
+  "worker-src 'self' blob:",
+].join('; ');
 const securityHeaders={
+  'content-security-policy':contentSecurityPolicy,
   'x-content-type-options':'nosniff',
   'x-frame-options':'DENY',
   'referrer-policy':'strict-origin-when-cross-origin',
