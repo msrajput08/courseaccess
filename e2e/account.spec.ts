@@ -25,7 +25,18 @@ async function register(page:Page,name:string):Promise<string>{
   return data.account.id;
 }
 test('passkey registration, login, session cookie and verified account deletion',async({page})=>{
+  const verifiedBodies:Record<string,unknown>[]=[];
+  page.on('request',request=>{
+    if(/\/api\/auth\/(?:register|login)\/verify$/.test(new URL(request.url()).pathname)){
+      const body=request.postDataJSON();
+      if(body&&typeof body==='object')verifiedBodies.push(body);
+    }
+  });
   await register(page,'Accessibility Lecturer');
+  const replaySignup=await page.request.post('/api/auth/register/verify',{
+    headers:{origin:'http://localhost:8789'},data:verifiedBodies[0],
+  });
+  expect(replaySignup.status()).toBe(400);
   const accessibility=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze();
   expect(accessibility.violations.map(v=>({id:v.id,impact:v.impact,nodes:v.nodes.length}))).toEqual([]);
   const first=await page.request.get('/api/auth/me');
@@ -37,6 +48,10 @@ test('passkey registration, login, session cookie and verified account deletion'
   await expect(page.getByRole('heading',{name:'Already registered?'})).toBeVisible();
   await page.getByRole('button',{name:/Sign in with passkey/}).click();
   await expect(page.getByText('Passkey verified. You are signed in.')).toBeVisible({timeout:30000});
+  const replayLogin=await page.request.post('/api/auth/login/verify',{
+    headers:{origin:'http://localhost:8789'},data:verifiedBodies.at(-1),
+  });
+  expect(replayLogin.status()).toBe(400);
 
   await page.getByLabel('Type DELETE MY ACCOUNT').fill('DELETE MY ACCOUNT');
   page.once('dialog',dialog=>dialog.accept());
@@ -81,6 +96,22 @@ test('institutional admin/owner roles restrict cross-organization changes',async
       data:{role:'owner'},
     });
     expect(selfElevate.status()).toBe(403);
+    const ownership=await owner.request.post('http://localhost:8789/api/organizations/'+organization.id+'/transfer',{
+      headers:{origin:'http://localhost:8789'},data:{accountId:viewerId},
+    });
+    expect(ownership.status()).toBe(200);
+    const oldMember=await (await owner.request.get('http://localhost:8789/api/auth/me')).json();
+    const newMember=await (await viewer.request.get('http://localhost:8789/api/auth/me')).json();
+    expect(oldMember.organizations.find((o:{id:string})=>o.id===organization.id).role).toBe('admin');
+    expect(newMember.organizations.find((o:{id:string})=>o.id===organization.id).role).toBe('owner');
+    const oldDelete=await owner.request.post('http://localhost:8789/api/organizations/'+organization.id+'/delete',{
+      headers:{origin:'http://localhost:8789'},data:{confirmName:'Science School'},
+    });
+    expect(oldDelete.status()).toBe(403);
+    const newDelete=await viewer.request.post('http://localhost:8789/api/organizations/'+organization.id+'/delete',{
+      headers:{origin:'http://localhost:8789'},data:{confirmName:'Science School'},
+    });
+    expect(newDelete.status()).toBe(200);
   }finally{await a.close();await b.close();await guest.close();}
 });
 test('unconfigured or untrusted-origin authentication is fail closed',async({request})=>{
