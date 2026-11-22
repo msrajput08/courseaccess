@@ -7,7 +7,7 @@ const root=join(process.cwd(),'quality','generated');
 const samples=[
  {file:'molecular-biology.docx',need:['Molecular Biology Workbook','Cell structure','Mitochondria','Energy conversion','Protein synthesis','Summary','Diagram showing a labeled schematic cell outline']},
  {file:'science-lecture.pptx',need:['Accessible Science Lecture','Learning outcomes','Cell Metabolism Case Study','cellular ATP']},
- {file:'assessment.xlsx',need:['Assessment Results','Lab Attendance','Amara','Noah','Mean score','Microscopy','Titration']},
+ {file:'assessment.xlsx',need:['Assessment Results','Lab Attendance','Amara','Noah','Mean score','=AVERAGE(B2:B3) [cached result: 90]','Microscopy','Titration']},
  {file:'biology-reader.epub',need:['Accessible Book Introduction','Cellular Pathways Chapter','Glycolysis','Energy release']},
  {file:'practical-log.ods',need:['Practical Log','Activity','Completed','Microscope Setup']},
  {file:'academic-handout.pdf',need:['Research Methods Seminar','Right column','Academic Handout Appendix','Second page supports']},
