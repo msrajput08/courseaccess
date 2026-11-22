@@ -3,12 +3,14 @@ from pathlib import Path
 import sqlite3
 import unittest
 
-SCHEMA=Path(__file__).resolve().parents[1]/"migrations"/"0001_prebilling.sql"
+SCHEMA_DIR=Path(__file__).resolve().parents[1]/"migrations"
+SCHEMAS=sorted(SCHEMA_DIR.glob('*.sql'))
 
 def db():
     con=sqlite3.connect(":memory:")
     con.execute("PRAGMA foreign_keys = ON")
-    con.executescript(SCHEMA.read_text(encoding="utf-8"))
+    for schema in SCHEMAS:
+        con.executescript(schema.read_text(encoding="utf-8"))
     return con
 
 def account(con,id):
@@ -81,6 +83,30 @@ class TestPrebillingSchema(unittest.TestCase):
         con.execute("INSERT INTO payment_event_receipts(provider,provider_event_id,verified_at_ms) VALUES('provider','evt_123',100)")
         with self.assertRaises(sqlite3.IntegrityError):
             con.execute("INSERT INTO payment_event_receipts(provider,provider_event_id,verified_at_ms) VALUES('provider','evt_123',101)")
+
+
+    def test_webauthn_challenge_metadata_rate_limit_and_single_owner(self):
+        con=db()
+        account(con,"a")
+        account(con,"b")
+        con.execute(
+            "INSERT INTO auth_challenges(challenge_id,account_id,nonce,purpose,expires_at_ms,created_at_ms,pending_display_name) VALUES(?,?,?,?,?,?,?)",
+            ("flow",None,"nonce","register",100_000,100,"Accessible Lecturer")
+        )
+        self.assertEqual(con.execute("SELECT pending_display_name FROM auth_challenges WHERE challenge_id='flow'").fetchone()[0],
+                         "Accessible Lecturer")
+        con.execute("UPDATE auth_challenges SET consumed_at_ms=200 WHERE challenge_id='flow' AND consumed_at_ms IS NULL")
+        self.assertEqual(con.execute("UPDATE auth_challenges SET consumed_at_ms=300 WHERE challenge_id='flow' AND consumed_at_ms IS NULL").rowcount,0)
+        con.execute("INSERT INTO auth_rate_limits(bucket,window_start_ms,hits) VALUES(?,?,?)",("key",100,1))
+        with self.assertRaises(sqlite3.IntegrityError):
+            con.execute("INSERT INTO auth_rate_limits(bucket,window_start_ms,hits) VALUES(?,?,?)",("invalid",100,0))
+        con.execute("INSERT INTO organizations(id,display_name,created_by,created_at_ms) VALUES('org','Math','a',100)")
+        con.execute("INSERT INTO organization_members VALUES('org','a','owner',100)")
+        with self.assertRaises(sqlite3.IntegrityError):
+            con.execute("INSERT INTO organization_members VALUES('org','b','owner',100)")
+        con.execute("UPDATE organization_members SET role='admin' WHERE organization_id='org' AND account_id='a'")
+        con.execute("INSERT INTO organization_members VALUES('org','b','owner',200)")
+        self.assertEqual(con.execute("SELECT COUNT(*) FROM organization_members WHERE role='owner' AND organization_id='org'").fetchone()[0],1)
 
 if __name__=="__main__":
     unittest.main()
