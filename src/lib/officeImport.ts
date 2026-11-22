@@ -225,7 +225,7 @@ async function parsePresentation(zip:JSZip):Promise<ImportedSection[]> {
       const rels=await readRelationships(zip,'ppt/presentation.xml');
       if(!rels)throw new Error('PowerPoint slide order relationships are missing.');
       slides=ids.map(slide=>{
-        const id=attr(slide,'id')||slide.getAttribute('r:id')||'';
+        const id=slide.getAttribute('r:id')||slide.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id')||'';
         const target=rels.get(id);
         if(!target || !/^ppt\/slides\/[^/]+\.xml$/.test(target) || !zip.file(target))
           throw new Error('PowerPoint slide order contains a missing or invalid slide relationship.');
@@ -259,11 +259,12 @@ async function parseSpreadsheet(zip:JSZip):Promise<ImportedSection[]>{
   const workbook=await readZip(zip,'xl/workbook.xml',false);
   const sheetNodes=workbook?descendants(parseXml(workbook),'sheet'):[];
   const names=sheetNodes.map(s=>attr(s,'name'));
-  if(sheetNodes.some(s=>s.getAttribute('r:id'))){
+  if(sheetNodes.some(s=>s.getAttribute('r:id')||s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id'))){
     const rels=await readRelationships(zip,'xl/workbook.xml');
     if(!rels)throw new Error('Excel worksheet order relationships are missing.');
     sheets=sheetNodes.map(s=>{
-      const target=rels.get(s.getAttribute('r:id')||'');
+      const id=s.getAttribute('r:id')||s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id')||'';
+      const target=rels.get(id);
       if(!target || !/^xl\/worksheets\/[^/]+\.xml$/.test(target) || !zip.file(target))
         throw new Error('Workbook contains a missing or invalid worksheet relationship.');
       return target;
@@ -398,7 +399,8 @@ async function parseEpub(zip:JSZip):Promise<ImportedSection[]>{
   const container=await readZip(zip,'META-INF/container.xml',false);
   if(container){
     const root=first(parseXml(container),'rootfile');
-    const opfPath=attr(root,'full-path');
+    const rawPath=attr(root,'full-path');
+    const opfPath=rawPath?archiveTarget('','/'+rawPath):'';
     if(!opfPath || !zip.file(opfPath))throw new Error('EPUB package document is missing.');
     const packageDoc=parseXml(await readZip(zip,opfPath));
     const manifest=first(packageDoc,'manifest'),spine=first(packageDoc,'spine');
