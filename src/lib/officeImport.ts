@@ -167,7 +167,14 @@ function parseWord(doc:Document):ImportedSection[]{
       for(const description of wordImageDescriptions(node))
         push(blocks,paragraph('Source image alternative text (verify): '+description));
     }else if(node.localName==='tbl'){
-      const rows=directCells(node,'tr','tc').map(row=>row.map(cell=>
+      const cells=directCells(node,'tr','tc');
+      const merged=cells.some(row=>row.some(cell=>{
+        const properties=elementChildren(cell,'tcPr')[0];
+        return properties && (first(properties,'gridSpan')||first(properties,'vMerge')||first(properties,'hMerge'));
+      }));
+      if(merged||descendants(node,'tbl').length)
+        throw new Error('Merged or nested Word tables cannot yet be mapped to a safe accessible table. Simplify the table in Word before importing.');
+      const rows=cells.map(row=>row.map(cell=>
         descendants(cell,'p').map(p=>wordText(p)).filter(Boolean).join(' ')));
       const width=rows[0]?.length||0;
       if(width>=2 && width<=16 && rows.length>=2 && rows.length<=200 && rows.every(r=>r.length===width))
@@ -253,11 +260,21 @@ async function parsePresentation(zip:JSZip):Promise<ImportedSection[]> {
 function excelValue(cell:Element,shared:string[]):string{
   const type=attr(cell,'t');
   const raw=textOf(first(cell,'v')||cell);
-  if(type==='s')return shared[Number(raw)]||'';
+  const formula=first(cell,'f');
+  if(formula){
+    const expression=(formula.textContent||'').trim();
+    if(!expression)throw new Error('A worksheet contains a shared or incomplete formula whose expression cannot be reconstructed. Open it in a spreadsheet editor and save with explicit formulas.');
+    if(expression.length>2000)throw new Error('Worksheet formula exceeds the supported 2,000-character limit.');
+    return '='+expression+(raw?' [cached result: '+raw+']':' [result not recalculated]');
+  }
+  if(type==='s'){
+    const index=Number(raw);
+    if(!Number.isSafeInteger(index)||index<0||index>=shared.length)
+      throw new Error('A worksheet references a missing or invalid shared string.');
+    return shared[index];
+  }
   if(type==='inlineStr')return descendants(cell,'t').map(textOf).join(' ');
   if(type==='b')return raw==='1'?'TRUE':'FALSE';
-  const formula=first(cell,'f');
-  if(formula)return (raw||'='+(formula.textContent||''))+' [formula]';
   return raw;
 }
 async function parseSpreadsheet(zip:JSZip):Promise<ImportedSection[]>{
