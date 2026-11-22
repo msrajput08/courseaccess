@@ -28,3 +28,22 @@ export function chunkDelimitedRows(
   }
   return chunks;
 }
+
+/** Repeat the actual first-row header in every logical continuation table.
+ * Avoid converting subsequent data rows into false column headings.
+ * start/end still describe unique source data rows, without counting header repeats.
+ */
+export function chunkTabularRows(
+  rows:readonly (readonly string[])[],maxRows=190,maxChars=12_000,
+):TableChunk[]{
+  if(rows.length<2)return chunkDelimitedRows(rows,maxRows,maxChars);
+  const header=rows[0].join('\t');
+  if(header.length>=maxChars || maxRows<2)
+    throw new Error('Table header exceeds the available reading-block limit.');
+  const data=chunkDelimitedRows(rows.slice(1),maxRows-1,maxChars-header.length-1);
+  return data.map((chunk,index)=>({
+    start:index===0?0:chunk.start+1,
+    end:chunk.end+1,
+    text:header+'\n'+chunk.text,
+  }));
+}
