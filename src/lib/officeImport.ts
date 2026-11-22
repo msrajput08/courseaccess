@@ -1,11 +1,16 @@
 import JSZip from 'jszip';
 import type {EditableBlock,DocumentFormat} from '../types';
+import {chunkDelimitedRows} from './tableChunks';
 
 export type SourceBlock=Pick<EditableBlock,'kind'|'text'|'headingLevel'|'description'>;
 export interface ImportedSection {label:string;blocks:SourceBlock[];imageCount:number;notes?:string[]}
 
 const MAX_ENTRIES=2500,MAX_XML_BYTES=12_000_000,MAX_UNPACKED=64_000_000,MAX_SECTIONS=80;
-const paragraph=(text:string,kind:SourceBlock['kind']='paragraph',extra:Partial<SourceBlock>={}):SourceBlock=>({kind,text:text.trim().slice(0,12000),...extra});
+const paragraph=(text:string,kind:SourceBlock['kind']='paragraph',extra:Partial<SourceBlock>={}):SourceBlock=>{
+  const content=text.trim();
+  if(content.length>12_000)throw new Error('A document content block exceeds 12,000 characters. Split the source instead of silently losing content.');
+  return {kind,text:content,...extra};
+};
 const elementChildren=(node:Node,name?:string):Element[]=>
   Array.from(node.childNodes).filter((n):n is Element=>n.nodeType===1 && (!name||(n as Element).localName===name));
 const descendants=(node:Element|Document,name:string):Element[]=>
@@ -37,7 +42,9 @@ function wordText(node:Element):string {
   return output.trim();
 }
 function push(b:SourceBlock[],block:SourceBlock){
-  if(block.text && b.length<16000)b.push(block);
+  if(!block.text)return;
+  if(b.length>=16000)throw new Error('Document exceeds 16,000 content elements. Split the source instead of silently losing content.');
+  b.push(block);
 }
 function ensureSections(sections:ImportedSection[]):ImportedSection[] {
   if(!sections.length)throw new Error('No readable document sections were found.');
@@ -106,7 +113,7 @@ function parseWord(doc:Document):ImportedSection[]{
       push(blocks,paragraph(value,kind,kind==='heading'?{headingLevel:(Math.min(4,Math.max(2,level||2)) as 2|3|4)}:{}));
     }else if(node.localName==='tbl'){
       const rows=directCells(node,'tr','tc').map(row=>row.map(cell=>
-        descendants(cell,'p').map(p=>wordText(p)).filter(Boolean).join(' ').slice(0,750)));
+        descendants(cell,'p').map(p=>wordText(p)).filter(Boolean).join(' ')));
       const width=rows[0]?.length||0;
       if(width>=2 && width<=16 && rows.length>=2 && rows.length<=200 && rows.every(r=>r.length===width))
         push(blocks,paragraph(rows.map(row=>row.join('\t')).join('\n'),'table',{description:'Imported table from Word'}));
@@ -142,7 +149,7 @@ function pptShapes(doc:Document,label:string):ImportedSection{
       const tables=descendants(child,'tbl');
       for(const table of tables){
         const rows=directCells(table,'tr','tc').map(row=>row.map(cell=>
-          descendants(cell,'t').map(textOf).filter(Boolean).join(' ').slice(0,750)));
+          descendants(cell,'t').map(textOf).filter(Boolean).join(' ')));
         if(rows.length>=2&&rows.length<=200&&rows[0].length>=2&&rows[0].length<=16&&rows.every(r=>r.length===rows[0].length))
           push(blocks,paragraph(rows.map(row=>row.join('\t')).join('\n'),'table',{description:'Table on '+label}));
         else for(const row of rows)push(blocks,paragraph(row.join(' | ')));
@@ -198,7 +205,7 @@ async function parseSpreadsheet(zip:JSZip):Promise<ImportedSection[]>{
         let index=0;for(const letter of letters.toUpperCase())index=index*26+(letter.charCodeAt(0)-64);
         const col=Math.max(0,index-1);
         if(col>=128)continue;
-        values[col]=excelValue(cell,shared).slice(0,750);
+        values[col]=excelValue(cell,shared);
         maxCol=Math.max(maxCol,col+1);
       }
       if(values.length)data.push(values);
@@ -206,15 +213,18 @@ async function parseSpreadsheet(zip:JSZip):Promise<ImportedSection[]>{
     }
     const sheetName=names[i]||'Sheet '+(i+1);
     if(!data.length){result.push({label:sheetName,blocks:[],imageCount:0});continue;}
-    for(let start=0;start<Math.max(1,maxCol);start+=16)for(let offset=0;offset<data.length;offset+=190){
-      const windowRows=data.slice(offset,offset+190).map(row=>Array.from({length:Math.min(16,maxCol-start)},(_,k)=>row[start+k]||''));
-      const maxWidth=windowRows[0]?.length||0;
-      const blocks:SourceBlock[]=[];
-      if(maxWidth>=2&&windowRows.length>=2){
-        push(blocks,paragraph(windowRows.map(row=>row.join('\t')).join('\n'),'table',{
-          description:sheetName+' · rows '+(offset+1)+'–'+(offset+windowRows.length)}));
-      }else for(const row of windowRows)push(blocks,paragraph(row.join(' ')));
-      result.push({label:sheetName+(offset||start?' · range '+(offset+1)+' / col '+(start+1):''),blocks,imageCount:0});
+    for(let start=0;start<Math.max(1,maxCol);start+=16){
+      const width=Math.min(16,maxCol-start);
+      const columnRows=data.map(row=>Array.from({length:width},(_,k)=>row[start+k]||''));
+      for(const chunk of chunkDelimitedRows(columnRows)){
+        const windowRows=columnRows.slice(chunk.start,chunk.end);
+        const blocks:SourceBlock[]=[];
+        if(width>=2&&windowRows.length>=2){
+          push(blocks,paragraph(chunk.text,'table',{
+            description:sheetName+' · rows '+(chunk.start+1)+'–'+chunk.end}));
+        }else for(const row of windowRows)push(blocks,paragraph(row.join(' ')));
+        result.push({label:sheetName+(chunk.start||start?' · range '+(chunk.start+1)+' / col '+(start+1):''),blocks,imageCount:0});
+      }
     }
   }
   return ensureSections(result);
@@ -238,7 +248,7 @@ function odfBlocks(container:Element,label:string):ImportedSection{
         const result:string[]=[];
         for(const cell of elementChildren(row).filter(e=>e.localName==='table-cell'||e.localName==='covered-table-cell')){
           const times=Math.min(16,Number(attr(cell,'number-columns-repeated')||1)||1);
-          const text=descendants(cell,'p').map(textOf).filter(Boolean).join(' ').slice(0,750);
+          const text=descendants(cell,'p').map(textOf).filter(Boolean).join(' ');
           for(let i=0;i<times&&result.length<16;i++)result.push(text);
         }
         return result;
