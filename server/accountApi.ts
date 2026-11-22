@@ -240,17 +240,17 @@ export async function handleAccountApi(req:Request,env:AccountEnv):Promise<Respo
       return responseJSON({enabled:activeAccountService(req,env),method:'passkey',billingEnabled:false});
     const origin=authOrigin(req,env),db=database(env),rpID=new URL(origin).hostname;
     requireSameOrigin(req);
-    if(path==='/api/auth/me'&&req.method==='GET')return getMe(req,db);
-    if(path==='/api/auth/register/options'&&req.method==='POST')return generateSignup(req,db,rpID);
-    if(path==='/api/auth/register/verify'&&req.method==='POST')return finishSignup(req,db,rpID,origin);
-    if(path==='/api/auth/login/options'&&req.method==='POST')return beginLogin(req,db,rpID);
-    if(path==='/api/auth/login/verify'&&req.method==='POST')return finishLogin(req,db,rpID,origin);
-    if(path==='/api/auth/passkeys/options'&&req.method==='POST')return startExtraPasskey(req,db,rpID);
-    if(path==='/api/auth/passkeys/verify'&&req.method==='POST')return finishExtraPasskey(req,db,rpID,origin);
-    if(path==='/api/auth/logout'&&req.method==='POST')return logout(req,db);
-    if(path==='/api/auth/delete'&&req.method==='POST')return deleteAccount(req,db);
+    if(path==='/api/auth/me'&&req.method==='GET')return await getMe(req,db);
+    if(path==='/api/auth/register/options'&&req.method==='POST')return await generateSignup(req,db,rpID);
+    if(path==='/api/auth/register/verify'&&req.method==='POST')return await finishSignup(req,db,rpID,origin);
+    if(path==='/api/auth/login/options'&&req.method==='POST')return await beginLogin(req,db,rpID);
+    if(path==='/api/auth/login/verify'&&req.method==='POST')return await finishLogin(req,db,rpID,origin);
+    if(path==='/api/auth/passkeys/options'&&req.method==='POST')return await startExtraPasskey(req,db,rpID);
+    if(path==='/api/auth/passkeys/verify'&&req.method==='POST')return await finishExtraPasskey(req,db,rpID,origin);
+    if(path==='/api/auth/logout'&&req.method==='POST')return await logout(req,db);
+    if(path==='/api/auth/delete'&&req.method==='POST')return await deleteAccount(req,db);
     if(path.startsWith('/api/organizations'))
-      return handleOrganizationApi(req,db,await requireIdentity(req,db));
+      return await handleOrganizationApi(req,db,await requireIdentity(req,db));
     return responseJSON({error:'Endpoint not found.'},404);
   }catch(error){
     if(error instanceof ApiError)return responseJSON({error:error.message},error.status);
