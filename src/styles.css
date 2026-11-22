@@ -111,3 +111,59 @@
 .private-tag {
   color: #22563f;
 }
+
+/* Phase 4 account and institution management — consistent with CourseAccess design. */
+.account-page{padding:76px 0 110px}
+.account-hero{display:flex;align-items:center;justify-content:space-between;gap:30px;margin:18px 0 38px}
+.account-hero h1{font-family:var(--serif);font-weight:400;font-size:clamp(42px,5.5vw,78px);line-height:1.04;margin:0 0 22px;color:var(--ink)}
+.account-hero h1 em{color:var(--teal);font-weight:400}
+.account-hero p{max-width:640px;color:#496057;font-size:16px}
+.account-hero-symbol{width:140px;height:140px;border-radius:26px;background:#e5efe7;color:var(--teal);display:grid;place-items:center;flex-shrink:0}
+.account-panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;margin-bottom:22px}
+.account-panel{background:#fff;border:1px solid #dce5dd;border-radius:18px;padding:35px;box-shadow:0 7px 27px rgba(20,51,40,.035);margin-bottom:22px;min-width:0}
+.account-panel>svg{color:var(--teal);margin-bottom:18px}
+.account-panel h2{font-family:var(--serif);font-size:32px;line-height:1.14;font-weight:400;margin:0 0 16px}
+.account-panel h3{font-size:18px;margin:20px 0 12px}
+.account-panel p{color:#455f52;font-size:14px;max-width:62ch}
+.account-panel label{display:block;font-size:13px;font-weight:750;color:#263d32;margin:20px 0 9px}
+.account-panel input,.account-panel select{width:100%;border:1px solid #9eada4;border-radius:8px;background:#fff;color:#20372d;font-size:14px;min-height:46px;padding:12px}
+.account-panel>.button,.account-invite>.button{margin-top:17px;max-width:100%;white-space:normal}
+.account-note{font-size:12px!important;margin-top:18px;color:#4f6359}
+.account-actions{display:flex;gap:10px;flex-wrap:wrap}
+.account-actions>.button{margin-top:12px;white-space:normal}
+.account-id{display:flex;gap:8px;justify-content:space-between;align-items:center;background:#f2f6f0;padding:10px 12px;border-radius:7px;margin:16px 0}
+.account-id span{min-width:0;overflow-wrap:anywhere;font-size:12px}.account-id code{color:#1b4c3e}.account-id button{background:#fff;color:#205043;border:1px solid #c7d6ce;border-radius:6px;padding:8px}
+.account-banner{padding:15px 19px;border-radius:9px;display:flex;align-items:center;gap:10px;margin-bottom:20px;font-size:14px}
+.account-success{background:#e8f3e9;color:#1d4f34;border:1px solid #9ec5a1}
+.account-error{background:#fff0ec;color:#883928;border:1px solid #e6afa1}
+.account-org-list{display:flex;gap:9px;flex-wrap:wrap}
+.account-org-list button{min-width:120px;padding:14px 17px;border:1px solid #c4d3c6;background:#f7faf6;border-radius:9px;color:#214438;text-align:left;display:flex;flex-direction:column;gap:4px}
+.account-org-list button.active{border-color:#205545;background:#e3f1e8}
+.account-org-list small{text-transform:capitalize;color:#45675b}
+.account-member-editor{border-top:1px solid #e5ebe4;margin-top:26px;padding-top:5px}
+.account-member-editor ul{padding:0;list-style:none}
+.account-member-editor li{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:15px 0;border-bottom:1px solid #e7eae5}
+.account-member-editor li div{flex:1;min-width:160px}
+.account-member-editor li strong{display:block;font-size:14px}
+.account-member-editor li small{display:block;overflow-wrap:anywhere;color:#526c60;font-size:11px;margin-top:4px}
+.account-member-editor li>span{background:#e8f2e9;color:#1a4e38;border-radius:99px;padding:5px 12px;font-size:11px;text-transform:capitalize}
+.account-member-editor li button{border:1px solid #bccdc0;border-radius:6px;padding:7px 10px;background:#fff;color:#1c493a;font-size:12px}
+.account-member-editor li select{width:auto;font-size:12px;min-height:35px;padding:6px}
+.account-invite{max-width:520px;padding:18px 0 12px}
+.account-danger{border-top:2px solid #dfb7ab;margin-top:24px;padding-top:24px}
+.account-danger h2,.account-danger h3{color:#7c392b}
+.account-danger button{padding:12px 16px;background:#923c30;color:#fff;border:0;border-radius:7px;margin-top:12px}
+.account-danger button:disabled{opacity:.5}
+@media(max-width:820px){
+ .account-page{padding:46px 0 75px}
+ .account-panels{grid-template-columns:1fr}
+ .account-hero-symbol{width:75px;height:75px;border-radius:16px}
+ .account-hero-symbol svg{width:40px}
+ .account-panel{padding:24px}
+ .account-hero h1{font-size:clamp(38px,8vw,64px)}
+}
+@media(max-width:500px){
+ .account-hero-symbol{display:none}
+ .account-member-editor li{gap:8px}
+ .account-panel h2{font-size:28px}
+}
