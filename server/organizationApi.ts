@@ -1,4 +1,4 @@
-import {ApiError,type Database,readBody,responseJSON,safeName,validId} from './accountSecurity';
+import {ApiError,type Database,readBody,responseJSON,safeName,validId,requireRecentVerification} from './accountSecurity';
 import type {Identity} from './accountApi';
 
 type Role='owner'|'admin'|'editor'|'viewer';
@@ -82,6 +82,7 @@ async function removeMember(db:Database,orgId:string,target:string,identity:Iden
   return responseJSON({removed:true});
 }
 async function transfer(req:Request,db:Database,orgId:string,identity:Identity):Promise<Response>{
+  requireRecentVerification(identity);
   if(await requireMembership(db,orgId,identity.account_id)!=='owner')
     throw new ApiError(403,'Only the owner can transfer ownership.');
   const body=await readBody(req),target=body.accountId;
@@ -98,6 +99,7 @@ async function transfer(req:Request,db:Database,orgId:string,identity:Identity):
   return responseJSON({transferred:true});
 }
 async function deleteOrganization(req:Request,db:Database,orgId:string,identity:Identity):Promise<Response>{
+  requireRecentVerification(identity);
   if(await requireMembership(db,orgId,identity.account_id)!=='owner')
     throw new ApiError(403,'Only the owner can delete an organization.');
   const body=await readBody(req);
