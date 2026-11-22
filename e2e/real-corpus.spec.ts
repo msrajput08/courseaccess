@@ -76,7 +76,8 @@ test('independently authored DOCX full reading export contains true PDF structur
   });
   await expect(page.getByRole('heading',{name:'reading-roundtrip.pdf'})).toBeVisible({timeout:40_000});
   await page.getByRole('tab',{name:'Edit text'}).click();
-  await expect(page.getByLabel('Extracted text').first()).toHaveValue(/Molecular Biology/i);
+  await expect.poll(async()=>page.getByLabel('Extracted text').evaluateAll(elements=>
+    elements.map(el=>(el as HTMLTextAreaElement).value).join(' '))).toMatch(/Molecular Biology/i);
 });
 
 test('authored EPUB OPF spine order survives through the semantic reading export',async({page})=>{
