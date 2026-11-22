@@ -30,3 +30,9 @@ Non-PDF previews are extracted-content references, not pixel-perfect Office rend
 ## QA
 
 Playwright imports actual ZIP fixtures for DOCX, PPTX, XLSX, ODT, ODP, ODS and EPUB. Additional CSV, Markdown and DOCX-to-tagged-PDF round-trip tests exercise extraction and export. A production live test processes DOCX through Cloudflare-hosted app.
+
+## Data-integrity and explicit limits
+
+CSV/TSV accepts UTF-8 BOM, quoted line breaks, escaped quotations, CRLF and CR line endings; malformed quoting is rejected rather than guessed. Large CSV and XLSX tables are split into bounded reading sections without silently clipping at the 12,000-character text-block limit. Delimited data is limited to 16,000 rows and 128 columns, and the current XLSX importer supports the first 128 columns only: data past that limit now causes an error rather than an incomplete export. A single table row or long paragraph that cannot fit the 12,000-character reading-block limit is rejected with guidance to split the source; it is never silently shortened. HTML tables over 200 rows or 16 columns and OpenDocument tables over 200 explicit rows similarly fail closed.
+
+These protections check **unsupported size conditions**, not semantic correctness: source-vs-export comparisons are still required for complex Office tables, repeated/merged ODF cells, charts and mathematical content. Do not market reading-copy outputs as source-layout-preserving or universally compliant.
