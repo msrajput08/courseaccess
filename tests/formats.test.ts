@@ -2,7 +2,7 @@ import {describe,it,expect} from 'vitest';
 import {detectDocumentFormat,ZIP_FORMATS,sectionUnit} from '../src/lib/formats';
 import {parseDelimited} from '../src/lib/importDocument';
 import {safeStem} from '../src/lib/export';
-import {chunkDelimitedRows,chunkTabularRows} from '../src/lib/tableChunks';
+import {chunkDelimitedRows,chunkTabularRows,serializeTableRow} from '../src/lib/tableChunks';
 describe('multiformat import safety and detection',()=>{
   it('supports common modern documents and rejects unknown files',()=>{
     expect(detectDocumentFormat('Course.DOCX')).toBe('docx');
@@ -49,6 +49,17 @@ describe('multiformat import safety and detection',()=>{
     expect(chunks[0].start).toBe(0);
     expect(chunks.at(-1)?.end).toBe(rows.length);
     expect(()=>chunkDelimitedRows([['x'.repeat(12_001)]])).toThrow(/row exceeds/i);
+  });
+  it('retains quoted multiline CSV fields without creating fake table rows or columns',()=>{
+    const cells=['Research note','A first line\r\nsecond line with\ttab','Another\nline'];
+    const line=serializeTableRow(cells);
+    expect(line.split('\t')).toHaveLength(3);
+    expect(line).toContain('first line\u2028second line with\u2003tab');
+    expect(line).toContain('Another\u2028line');
+    const chunks=chunkTabularRows([['Header','Notes'],['Student','Line one\nLine two']]);
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].text.split('\n')).toHaveLength(2);
+    expect(chunks[0].text).toContain('Line one\u2028Line two');
   });
   it('repeats the actual column headings for continued data tables',()=>{
     const rows=[['Student','Score'],...Array.from({length:100},(_,i)=>['Learner '+i,String(i)])];
