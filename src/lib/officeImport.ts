@@ -385,10 +385,10 @@ function htmlBlocks(body:Element):SourceBlock[]{
       if(current.nodeType!==1)return '';
       const element=current as Element,tag=element.localName.toLowerCase();
       if(ignored.has(tag)||element.hasAttribute('hidden')||element.getAttribute('aria-hidden')==='true'||
-        /(?:^|;)\\s*(?:display\\s*:\\s*none|visibility\\s*:\\s*hidden)/i.test(element.getAttribute('style')||''))return '';
+        /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)/i.test(element.getAttribute('style')||''))return '';
       return Array.from(element.childNodes).map(visit).join('');
     };
-    return visit(node).replace(/\\s+/g,' ').trim();
+    return visit(node).replace(/\s+/g,' ').trim();
   };
   const process=(node:Element)=>{
     const name=node.localName.toLowerCase();
