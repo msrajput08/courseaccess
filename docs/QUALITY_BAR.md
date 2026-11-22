@@ -38,3 +38,7 @@ The independent PDF/UA-1 sample validation gate is now strict: any generated sam
 The loaded document editor failed an initial automated axe WCAG color contrast check on desktop and mobile despite public pages passing. The Phase 3 branch adds an editor-specific regression and increases text contrast without removing the visual design. Use the latest GitHub Actions result, not the existence of this code, to establish whether the correction passes.
 
 This change also tests Office source order and prevents silent paragraph/table clipping. It does **not** establish a certified PDF repair engine or prove native DOCX/PPTX/XLSX layout preservation.
+
+## Runtime provider-independence improvement
+
+Tesseract worker/core and five OCR language packs are now included as first-party static build assets. This removes a runtime requirement to access a third-party model CDN while preserving browser-local recognition. Network availability for first load and Cloudflare static delivery still matter. The build script fails if an OCR asset cannot be packaged under the Cloudflare 25 MiB/file cap. Browser regression checks are necessary but not a substitute for production load/performance benchmarking.

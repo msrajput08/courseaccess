@@ -86,3 +86,7 @@ See [Multiformat import](docs/MULTIFORMAT.md) for supported formats and precise 
 Phase 3 adds source-order correctness for PPTX/XLSX/EPUB, explicit failure rather than silent text clipping, bounded CSV/XLSX continuation tables with true headers, real populated-workspace accessibility regression tests, self-hosted UI fonts and Worker security headers. A D1-compatible data model and local SQLite tests for accounts, institutions, session hashes and idempotent usage quotas are documented in [Pre-billing engineering](docs/PREBILLING.md).
 
 This is not active authentication, verified usage enforcement, a live payment service or arbitrary original-PDF retagging. The free browser-local checker remains functional without credentials or D1. Release gates are defined in [Validation](docs/VALIDATION.md) and the [Launch checklist](docs/LAUNCH_CHECKLIST.md).
+
+### Self-hosted OCR engine assets
+
+First-use OCR downloads its browser worker, WASM core and selected language pack from the CourseAccess origin, not a third-party OCR inference API or CDN. The models are bundled from npm during `prebuild` and `predev` by `scripts/vendor-ocr.mjs`, with 25 MiB per-file safety checks; `public/ocr/` is generated and intentionally not committed. OCR recognition itself runs locally in the browser. The generated assets require real deployment verification before activating a new production version.

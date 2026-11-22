@@ -8,7 +8,7 @@
 - AI is disabled. Never send student data to external services without user disclosure and explicit consent.
 - Production requires reviewed CSP compatible with the PDF worker, secure session design, scoped ownership checks, rate limits for server-side workloads, signed Stripe webhooks and a data-retention policy.
 - Privacy and terms pages describe current behavior, not legal approval, GDPR, FERPA, WCAG or PDF/UA certification.
-- Website UI fonts (DM Sans and DM Serif Display) are bundled and served locally. OCR worker/core/language resources may still download externally on demand; source document pixels and text remain in the browser.
+- Website UI fonts (DM Sans and DM Serif Display) are bundled and served locally. The OCR Worker, WASM core and supported English/Hindi/Spanish/French/German language packs are staged as first-party static assets at build time; document pixels and recognized text remain in the browser. Models are downloaded by the end user's browser on demand from CourseAccess's own origin.
 
 ### Client-side OCR
 
@@ -19,3 +19,7 @@ Tesseract.js worker and recognition models are fetched as executable/static reso
 The Worker applies X-Frame-Options: DENY, Referrer-Policy: strict-origin-when-cross-origin, Permissions-Policy restrictions, X-Content-Type-Options: nosniff and Cross-Origin-Resource-Policy: same-origin to its owned responses. A production Content-Security-Policy still requires testing against local PDF workers and on-demand OCR model loading, and must not be turned on blindly.
 
 No authenticated sessions, credentials, organizations or usage records are persisted by the public app. D1 SQL migration files exist only as a prospective schema. Security validation for future passkeys, CSRF/rate limits, organization authorization, account deletion and webhook integrity must happen before enabling paid offerings.
+
+## First-party OCR asset boundary
+
+`scripts/vendor-ocr.mjs` copies Tesseract.js core variants, the browser Worker and a fixed set of `.traineddata.gz` language models into `public/ocr/` during `npm run build` or `npm run dev`. Files are built from installed npm packages, and build fails if a package or file is missing or an asset exceeds Cloudflare's 25 MiB individual static-file limit. These static files are served directly by Cloudflare Workers Static Assets (not the paid Worker handler). Inspect third-party npm license and model terms before production distribution. Model downloads are still network requests on first use, but now use only the application's own domain. No remote OCR inference service receives document content.

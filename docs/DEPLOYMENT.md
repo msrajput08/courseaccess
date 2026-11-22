@@ -35,3 +35,7 @@ Cloudflare official instructions: https://developers.cloudflare.com/workers/ci-c
 ## Optional pre-payment account infrastructure (not provisioned)
 
 Do not attach a fictitious D1 database ID to production Wrangler configuration. The Phase 3 migration is an offline-reviewed contract only. After the product owner provisions a real D1 instance and completes audited authentication and organization authorization, configure separate development/production bindings, apply migrations with a backup, and test durable account, session and quota semantics before turning on any account API. See [Pre-billing engineering](PREBILLING.md). No production database is created by this PR.
+
+## OCR model packaging and Cloudflare cost
+
+The prebuild step `node scripts/vendor-ocr.mjs` stages first-party Tesseract worker, core WASM and five language packs in `public/ocr/`. `wrangler.jsonc` bypasses the Worker script for `/ocr/*` so models are delivered as static assets instead of consuming per-request Worker compute. Cloudflare's current static asset per-file limit is 25 MiB; the script checks that limit. Verify with published deployment smoke checks that `/ocr/worker.min.js` and `/ocr/lang/eng.traineddata.gz` return real binary assets, not the SPA HTML shell. Because browsers download models on demand, users may incur initial model download traffic; all OCR inference remains local.

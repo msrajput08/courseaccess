@@ -7,3 +7,6 @@ coverage/
 .DS_Store
 *.local
 *.tsbuildinfo
+
+# Generated first-party OCR runtime and model assets (staged by prebuild/predev)
+public/ocr/

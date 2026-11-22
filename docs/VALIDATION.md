@@ -45,3 +45,7 @@ Verify a real image-only PDF generated from JPEG pixels (not a fake PDF text fix
 - Typography assets are bundled locally and tests reject accidental third-party UI font requests. Cloudflare navigation, API and asset mock responses are tested for security/privacy headers.
 
 Passing synthetic fixtures does not prove that arbitrary real-world files, scanned handwriting, documents with macros, complicated multi-column layouts or source-format round trips are complete. Real-world review and screen-reader signoff remain release requirements.
+
+## Local OCR runtime regression
+
+Browser OCR exercises a real JPEG-based image-only PDF; the test now checks that the generated first-party Worker and English model are served from `/ocr/` and that the scan does not request the known external Tesseract model/worker CDNs. The staging script runs automatically before dev and production builds and refuses missing dependencies or any OCR asset larger than Cloudflare's 25 MiB per-file static asset cap. Browser tests on a feature branch do not verify deployed Cloudflare asset routing until a fresh owner-approved deployment and live smoke test.
