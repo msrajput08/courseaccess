@@ -6,7 +6,7 @@ import {
 import {
   type AccountEnv,type Database,ApiError,responseJSON,activeAccountService,
   requireSameOrigin,readBody,safeName,validId,getCookie,cookie,
-  sessionCookie,flowCookie,newSecret,sha256,changes,rateLimit,dbKey
+  sessionCookie,flowCookie,newSecret,sha256,changes,rateLimit,dbKey,requireRecentVerification
 } from './accountSecurity';
 import {handleOrganizationApi} from './organizationApi';
 
@@ -161,7 +161,7 @@ async function finishLogin(req:Request,db:Database,rpID:string,origin:string):Pr
   if(!result.verified)throw new ApiError(401,'Passkey verification failed.');
   const now=Date.now(),secret=newSecret(),hash=await sha256(secret);
   await db.batch([
-    db.prepare('UPDATE passkey_credentials SET sign_count=?,last_used_at_ms=? WHERE credential_id=?').bind(
+    db.prepare('UPDATE passkey_credentials SET sign_count=MAX(sign_count,?),last_used_at_ms=? WHERE credential_id=?').bind(
       result.authenticationInfo.newCounter,now,row.credential_id),
     db.prepare('INSERT INTO sessions(token_hash,account_id,issued_at_ms,expires_at_ms) VALUES(?,?,?,?)').bind(
       hash,row.account_id,now,now+SESSION_SECONDS*1000),
@@ -231,9 +231,8 @@ async function deleteAccount(req:Request,db:Database):Promise<Response>{
   const identity=await requireIdentity(req,db);
   const body=await readBody(req);
   if(body.confirm!=='DELETE MY ACCOUNT')throw new ApiError(400,'Confirmation phrase does not match.');
-  // High impact action requires a passkey login in the last 10 minutes.
-  if(Date.now()-identity.issued_at_ms>600_000)
-    throw new ApiError(403,'Sign out and verify your passkey again before deleting an account.');
+  // High-impact account deletion must follow fresh passkey verification.
+  requireRecentVerification(identity);
   await db.batch([
     // Owned organizations, including their memberships, are removed first.
     db.prepare('DELETE FROM organizations WHERE created_by=?').bind(identity.account_id),
