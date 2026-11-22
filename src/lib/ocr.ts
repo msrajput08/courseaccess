@@ -19,7 +19,15 @@ export type OcrSession={recognize:(canvas:HTMLCanvasElement)=>Promise<OcrRecogni
  */
 export async function startOcr(language:OcrLanguage):Promise<OcrSession> {
   const {createWorker}=await import('tesseract.js');
-  const worker=await createWorker(language);
+  // Load executable worker, WASM variants and language packs from this
+  // application's static assets; no runtime third-party OCR CDN dependency.
+  const origin=new URL('/',window.location.href);
+  const worker=await createWorker(language,1,{
+    workerPath:new URL('ocr/worker.min.js',origin).href,
+    corePath:new URL('ocr/core',origin).href,
+    langPath:new URL('ocr/lang',origin).href,
+    workerBlobURL:false,
+  });
   return {
     async recognize(canvas) {
       const result=await worker.recognize(canvas,{}, {blocks:true});
