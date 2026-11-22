@@ -92,3 +92,22 @@
   .nav.open a{display:flex;align-items:center;min-height:48px;width:100%;padding:12px 18px}
   .nav.open{gap:5px}
 }
+
+/* Document-workspace WCAG AA contrast fixes verified against an actual
+   loaded editor, not only the empty marketing/checker routes.
+   Keep subtle background shades; increase the foreground ink instead. */
+.workspace-intro p,
+.stats-row span,
+.stats-row .stats-caveat,
+.rail-label,
+.rail-note p,
+.column-heading span:last-child,
+.pager,
+.insight-tabs button:not(.active),
+.panel-heading p,
+.inline-notice {
+  color: #395448;
+}
+.private-tag {
+  color: #22563f;
+}
