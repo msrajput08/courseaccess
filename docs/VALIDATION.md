@@ -59,3 +59,10 @@ Browser OCR exercises a real JPEG-based image-only PDF; the test now checks that
 `scripts/generate_real_corpus.py` generates a completely original, license-clear integration corpus on each PR: actual `python-docx` DOCX with styled headings, table and a descriptive embedded figure; actual `python-pptx` slides; actual `reportlab` multipage/vector-figure PDF; and valid package-based XLSX, EPUB and ODS samples with workbook relationships, EPUB spine order and compressed repeated spreadsheet rows. `e2e/real-corpus.spec.ts` imports all six, checks expected source text, exported HTML table headings, no mutation of the original input, ordered chapter content, source figure descriptions, PDF diagram review cues, and a tagged DOCX-to-PDF reopened reading copy. Generated originals and SHA-256 hashes are stored as a CI evidence artifact.
 
 These files are *authoring-library-generated controls*, not a statistically representative sample of arbitrary third-party institutional originals. Before public accessibility claims, complete the separate license-cleared field corpus plus manual NVDA, VoiceOver, and TalkBack release matrix. Do not describe a generated PDF reading copy as original-layout tagging repair.
+
+## Additional no-silent-data-loss security gates
+
+- XLSX formula expressions and cached results must both survive import; nonexistent shared string references and incomplete shared-formula XML fail closed.
+- DOCX Word footnotes and endnotes are positioned after their references; unresolved note references, merged/nested tables and unsupported Office Math must fail rather than create deceptively complete exports.
+- Quoted multiline CSV fields stay a single accessible table cell, without extra row/column breaks.
+- Passkey API uses a bounded streaming JSON reader (including no-length or dishonest-length requests), strict UTF-8, and fresh authenticated sessions before institution ownership takeover/deletion. Unit and virtual-authenticator browser suites cover account security.
