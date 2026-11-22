@@ -31,3 +31,9 @@ The Phase 3 feature branch includes WebAuthn passwordless registration/login usi
 **Production safety:** the service requires a real D1 binding, exact `COURSEACCESS_AUTH_ORIGIN` and `COURSEACCESS_ACCOUNTS_ENABLED=true`, all absent in the default deployed Wrangler config. Unprovisioned account routes return 503; no guest is silently granted a premium tier. No payment gateway or cloud document storage exists.
 
 This is application code and automated checks, *not* a third-party penetration test or proof of production-grade IAM. Before activation, independently review threat models, Cloudflare WAF/rate-limit settings, D1 transactions, backup and recovery, account deletion obligations, security headers, session expiry and passkey device compatibility.
+
+## High-impact account actions and bounded API input
+
+Account deletion, organization ownership transfers, and organization deletion require a **passkey-authenticated session issued within the previous 10 minutes**. All other membership actions are server-authorized against current D1 roles. The auth API uses a streaming 16-KiB JSON ceiling: declared Content-Length is not trusted to validate actual body size. A too-large request is cancelled early rather than buffered in memory; UTF-8 decoding is strict. Credential-signature counters are updated monotonically. Rate-limit buckets expire opportunistically after a 48-hour retention window (subject to future application traffic). Cloudflare account activation remains off unless explicitly configured with a trusted origin and migrated D1.
+
+These controls reduce common threats; they are **not** a substitute for a production penetration test, origin-specific mobile/passkey verification, Cloudflare WAF review, incident-response planning, independent data-protection review, or operator-controlled D1 backup/restore.
