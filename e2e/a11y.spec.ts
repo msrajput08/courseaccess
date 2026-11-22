@@ -12,3 +12,14 @@ for (const route of routes) {
     expect(formatted,JSON.stringify(formatted,null,2)).toEqual([]);
   });
 }
+
+test('the public interface requests no third-party webfonts',async({page})=>{
+  const externalFonts:string[]=[];
+  page.on('request',request=>{
+    const url=request.url();
+    if(url.startsWith('https://fonts.googleapis.com')||url.startsWith('https://fonts.gstatic.com'))externalFonts.push(url);
+  });
+  await page.goto('/');
+  await page.evaluate(async()=>{await document.fonts.ready;});
+  expect(externalFonts).toEqual([]);
+});
