@@ -50,7 +50,8 @@ def make_docx(figure: Path) -> None:
         row = table.add_row().cells
         row[0].text, row[1].text = organelle, description
     doc.add_paragraph("A cell diagram follows.")
-    doc.add_picture(str(figure), width=WordInches(2.5))
+    image = doc.add_picture(str(figure), width=WordInches(2.5))
+    image._inline.docPr.set("descr", "Diagram showing a labeled schematic cell outline")
     doc.add_heading("Summary", level=2)
     doc.add_paragraph("Students compare organelle functions using accessible tables.")
     doc.save(ROOT / "molecular-biology.docx")
