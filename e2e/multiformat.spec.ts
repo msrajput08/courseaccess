@@ -272,3 +272,112 @@ test('merged HTML tables reject invalid accessible header relationships',async({
   await expect(page.getByRole('alert')).toContainText(/Merged HTML table cells/i);
   await expect(page.getByRole('heading',{name:'merged-table.html'})).toHaveCount(0);
 });
+
+
+test('DOCX reading copies retain referenced Word footnotes and endnotes in document order',async({page})=>{
+  const zip=new JSZip();
+  const word='<?xml version="1.0"?>'+
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+
+    '<w:p><w:r><w:t>Foundational research methods</w:t></w:r><w:r><w:footnoteReference w:id="2"/></w:r></w:p>'+
+    '<w:p><w:r><w:t>Further experimental evidence</w:t></w:r><w:r><w:endnoteReference w:id="4"/></w:r></w:p>'+
+    '</w:body></w:document>';
+  const notes=(kind:string,id:number,content:string)=>
+    '<?xml version="1.0"?><w:'+kind+'s xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'+
+    '<w:'+kind+' w:id="'+id+'"><w:p><w:r><w:t>'+content+'</w:t></w:r></w:p></w:'+kind+'></w:'+kind+'s>';
+  zip.file('word/document.xml',word);
+  zip.file('word/footnotes.xml',notes('footnote',2,'Original footnote citation details'));
+  zip.file('word/endnotes.xml',notes('endnote',4,'Original endnote research context'));
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'notes.docx',mimeType:'application/octet-stream',
+    buffer:await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'}),
+  });
+  await expect(page.getByRole('heading',{name:'notes.docx'})).toBeVisible({timeout:30000});
+  const pending=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export HTML'}).click();
+  const html=await readFile(await (await pending).path(),'utf8');
+  expect(html).toContain('Foundational research methods');
+  expect(html).toContain('Footnote 2: Original footnote citation details');
+  expect(html).toContain('Further experimental evidence');
+  expect(html).toContain('Endnote 4: Original endnote research context');
+  expect(html.indexOf('Foundational research methods')).toBeLessThan(html.indexOf('Footnote 2'));
+  expect(html.indexOf('Further experimental evidence')).toBeLessThan(html.indexOf('Endnote 4'));
+});
+test('unresolved DOCX footnote references fail before incomplete export',async({page})=>{
+  const zip=new JSZip();
+  zip.file('word/document.xml','<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'+
+    '<w:body><w:p><w:r><w:t>Unresolved source note</w:t></w:r>'+
+    '<w:r><w:footnoteReference w:id="21"/></w:r></w:p></w:body></w:document>');
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'unresolved.docx',mimeType:'application/octet-stream',
+    buffer:await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'}),
+  });
+  await expect(page.getByRole('alert')).toContainText(/footnote reference 21.*not be resolved/i);
+  await expect(page.getByRole('heading',{name:'unresolved.docx'})).toHaveCount(0);
+});
+test('merged DOCX tables and unsupported Office Math formulas fail closed',async({page})=>{
+  const make=async(content:string)=>{
+    const zip=new JSZip();
+    zip.file('word/document.xml','<?xml version="1.0"?>'+
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '+
+      'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><w:body>'+content+'</w:body></w:document>');
+    return zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'});
+  };
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'merged.docx',mimeType:'application/octet-stream',
+    buffer:await make('<w:tbl><w:tr><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr>'+
+      '<w:p><w:r><w:t>Merged academic header</w:t></w:r></w:p></w:tc></w:tr></w:tbl>')
+  });
+  await expect(page.getByRole('alert')).toContainText(/Merged or nested Word tables/i);
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'math.docx',mimeType:'application/octet-stream',
+    buffer:await make('<w:p><m:oMath><m:r><m:t>E=mc2</m:t></m:r></m:oMath></w:p>')
+  });
+  await expect(page.getByRole('alert')).toContainText(/Office Math formulas/i);
+});
+test('Excel preserves formula expressions alongside cached results and refuses missing shared strings',async({page})=>{
+  const excel=async(worksheet:string)=>{
+    const zip=new JSZip();
+    zip.file('xl/workbook.xml',workbookXml);
+    zip.file('xl/worksheets/sheet1.xml','<?xml version="1.0"?>'+
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+      '<sheetData>'+worksheet+'</sheetData></worksheet>');
+    return zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'});
+  };
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'formula.xlsx',mimeType:'application/octet-stream',
+    buffer:await excel('<row r="1"><c r="A1" t="inlineStr"><is><t>Formula</t></is></c>'+
+      '<c r="B1" t="inlineStr"><is><t>Value</t></is></c></row>'+
+      '<row r="2"><c r="A2" t="inlineStr"><is><t>Average</t></is></c>'+
+      '<c r="B2"><f>AVERAGE(C2:C3)</f><v>47</v></c></row>')
+  });
+  await expect(page.getByRole('heading',{name:'formula.xlsx'})).toBeVisible({timeout:30000});
+  const pending=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export HTML'}).click();
+  const html=await readFile(await (await pending).path(),'utf8');
+  expect(html).toContain('=AVERAGE(C2:C3) [cached result: 47]');
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'missing-string.xlsx',mimeType:'application/octet-stream',
+    buffer:await excel('<row r="1"><c r="A1" t="s"><v>99</v></c></row>')
+  });
+  await expect(page.getByRole('alert')).toContainText(/missing or invalid shared string/i);
+});
+test('quoted CSV line breaks and tabs remain inside accessible table cells',async({page})=>{
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'research.csv',mimeType:'text/csv',
+    buffer:Buffer.from('Student,Notes\nAda,"First line\nSecond line\twith tab"\nBea,Complete'),
+  });
+  await expect(page.getByRole('heading',{name:'research.csv'})).toBeVisible({timeout:30000});
+  const pending=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export HTML'}).click();
+  const html=await readFile(await (await pending).path(),'utf8');
+  expect(html).toContain('<th scope="col">Student</th>');
+  expect(html).toContain('First line\u2028Second line\u2003with tab');
+  expect((html.match(/<tr>/g)||[]).length).toBe(3);
+});
