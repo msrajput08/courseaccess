@@ -50,7 +50,7 @@ export function normalizeOcrBoxes(raw:unknown, imageWidth:number, imageHeight:nu
       for(const line of paragraph.lines) {
         if(!Array.isArray(line?.words))continue;
         for(const word of line.words) {
-          if(boxes.length>=3500)return boxes;
+          if(boxes.length>=3500)return []; // Too many positioned words: disable unsafe partial searchable export.
           const val=typeof word?.text==='string'?word.text.trim():'';
           const bb=word?.bbox;
           if(!val || val.length>120 || !bb)continue;
@@ -71,7 +71,8 @@ export function normalizeOcrBoxes(raw:unknown, imageWidth:number, imageHeight:nu
   return boxes;
 }
 export function normalizeOcrResult(language:OcrLanguage, text:string, confidence:number, words:OcrWordBox[]=[]): {ocr:PageOcr; lines:string[]} {
-  const clean=text.replace(/\u0000/g,'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean).slice(0,400);
+  const clean=text.replace(/\u0000/g,'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+  if(clean.length>400)return {ocr:{status:'failed',language,characters:0},lines:[]};
   const chars=clean.join(' ').length;
   const conf=Number.isFinite(confidence)?Math.max(0,Math.min(100,confidence)):0;
   const usable=chars>=4 && conf>=20;
