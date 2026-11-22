@@ -125,7 +125,7 @@ async function finishSignup(req:Request,db:Database,rpID:string,origin:string):P
     ]);
   }catch{throw new ApiError(409,'Account registration could not be completed. Please retry.');}
   return responseJSON({authenticated:true,account:{id:challenge.challenge_id,name:challenge.pending_display_name}},201,{
-    'set-cookie':cookie(sessionCookie,secret,SESSION_SECONDS)+', '+cookie(flowCookie,'',0),
+    'set-cookie':cookie(sessionCookie,secret,SESSION_SECONDS),
   });
 }
 async function beginLogin(req:Request,db:Database,rpID:string):Promise<Response>{
@@ -163,7 +163,7 @@ async function finishLogin(req:Request,db:Database,rpID:string,origin:string):Pr
       hash,row.account_id,now,now+SESSION_SECONDS*1000),
   ]);
   return responseJSON({authenticated:true},200,{
-    'set-cookie':cookie(sessionCookie,secret,SESSION_SECONDS)+', '+cookie(flowCookie,'',0),
+    'set-cookie':cookie(sessionCookie,secret,SESSION_SECONDS),
   });
 }
 async function startExtraPasskey(req:Request,db:Database,rpID:string):Promise<Response>{
