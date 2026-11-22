@@ -41,3 +41,7 @@ The current free checker deliberately avoids an insecure imitation of authentica
 ### Offline-first remediation additions
 
 `src/lib/ocr.ts` wraps a lazily loaded browser Tesseract worker used only on image-backed pages with no extracted text. `src/lib/taggedPdf.ts` generates a new tagged reading PDF using browser PDFKit and bundled embedded fonts; no original PDF alteration, server processing or paid provider. The new reading PDF must not be represented as a complete repair of arbitrary original PDF structures.
+
+## Pre-payment engineering status
+
+The Phase 3 branch adds migrations/0001_prebilling.sql, an optional data model for passkeys, session hashes, accounts, organizations, billing state, quotas and event receipts. The source includes SQL invariant tests, but no new identity endpoints or database binding. No payment, subscription or usage-metering feature is activated in the current deployed Worker. See docs/PREBILLING.md for exact authentication, D1, security and deployment prerequisites. These must be completed before making claims that payment integration is the only remaining production task.

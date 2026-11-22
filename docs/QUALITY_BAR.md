@@ -32,3 +32,9 @@ Reference documentation:
 6. A failed PDF/UA result is a product defect to prioritize, not a marketing label to hide.
 
 The independent PDF/UA-1 sample validation gate is now strict: any generated sample failure blocks CI and production deployment. The browser-produced basic and STEM samples have passed the current veraPDF profile. This is narrower than universal PDF/UA certification: robust coverage still requires larger real-document corpora, screen-reader walkthroughs, figure semantics and tests on arbitrarily complex source documents.
+
+## Phase 3 findings
+
+The loaded document editor failed an initial automated axe WCAG color contrast check on desktop and mobile despite public pages passing. The Phase 3 branch adds an editor-specific regression and increases text contrast without removing the visual design. Use the latest GitHub Actions result, not the existence of this code, to establish whether the correction passes.
+
+This change also tests Office source order and prevents silent paragraph/table clipping. It does **not** establish a certified PDF repair engine or prove native DOCX/PPTX/XLSX layout preservation.

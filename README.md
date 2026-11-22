@@ -80,3 +80,9 @@ CourseAccess now processes Word DOCX, PowerPoint PPTX, Excel XLSX, OpenDocument 
 The source preview for non-PDF documents is an extracted-content preview, not a claim of pixel-perfect Office rendering. Complex visual diagrams and merged cells require source verification. Legacy binary DOC/PPT/XLS should be saved to current XML Office formats first.
 
 See [Multiformat import](docs/MULTIFORMAT.md) for supported formats and precise boundaries.
+
+## Pre-payment hardening branch
+
+Phase 3 adds source-order correctness for PPTX/XLSX/EPUB, explicit failure rather than silent text clipping, bounded CSV/XLSX continuation tables with true headers, real populated-workspace accessibility regression tests, self-hosted UI fonts and Worker security headers. A D1-compatible data model and local SQLite tests for accounts, institutions, session hashes and idempotent usage quotas are documented in [Pre-billing engineering](docs/PREBILLING.md).
+
+This is not active authentication, verified usage enforcement, a live payment service or arbitrary original-PDF retagging. The free browser-local checker remains functional without credentials or D1. Release gates are defined in [Validation](docs/VALIDATION.md) and the [Launch checklist](docs/LAUNCH_CHECKLIST.md).

@@ -31,3 +31,7 @@ Once configured, manually run the workflow once. On future main pushes, it will 
 No D1, R2, AI provider, checkout or account-service activation is included. Actual Cloudflare usage quotas apply.
 
 Cloudflare official instructions: https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/
+
+## Optional pre-payment account infrastructure (not provisioned)
+
+Do not attach a fictitious D1 database ID to production Wrangler configuration. The Phase 3 migration is an offline-reviewed contract only. After the product owner provisions a real D1 instance and completes audited authentication and organization authorization, configure separate development/production bindings, apply migrations with a backup, and test durable account, session and quota semantics before turning on any account API. See [Pre-billing engineering](PREBILLING.md). No production database is created by this PR.

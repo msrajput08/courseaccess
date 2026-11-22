@@ -34,3 +34,14 @@ Verify a real image-only PDF generated from JPEG pixels (not a fake PDF text fix
 - Browser cases use genuine ZIP-based DOCX/XLSX fixtures: a long XLSX worksheet must retain its first and last data rows through HTML export, invalid CSV must show an error, and a Word paragraph exceeding the supported block size must be rejected rather than clipped.
 - Source extraction is **not** proven pixel-perfect or lossless for every file. Structural fidelity of graphs, formulas, cell merges, text-boxes, pagination and reading order still requires representative original-document reviews.
 - A passing synthetic-fixture gate is not equivalent to independent PDF/UA certification, screen-reader usability testing or a real-world multi-format release audit.
+
+## Phase 3 expanded CI coverage
+
+- Real ZIP-based ordering tests verify PowerPoint presentation relationships, Excel workbook worksheet relationships and EPUB OPF spine order, plus a fail-closed missing slide reference.
+- Reflowed long tabular sources preserve the true header on every continuation chunk while retaining all data rows. Unit and browser tests check malformed quoted CSV, XLSX tail rows, and oversized DOCX rejection.
+- PDF inspection and OCR avoid a successful-looking but incomplete export when source line thresholds are exceeded. Positioned OCR exports fail closed rather than exporting an arbitrary first subset.
+- Automated WCAG axe audits now include the **populated editing workspace** on desktop and mobile, not only public routes. Color-contrast fixes are included. This is not a replacement for actual NVDA, JAWS, VoiceOver or TalkBack testing.
+- The D1-compatible migration is covered using native SQLite in scripts/test_prebilling_schema.py: schema integrity, idempotency, quotas, cascades and organization roles. The database is not enabled in production.
+- Typography assets are bundled locally and tests reject accidental third-party UI font requests. Cloudflare navigation, API and asset mock responses are tested for security/privacy headers.
+
+Passing synthetic fixtures does not prove that arbitrary real-world files, scanned handwriting, documents with macros, complicated multi-column layouts or source-format round trips are complete. Real-world review and screen-reader signoff remain release requirements.
