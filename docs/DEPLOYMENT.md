@@ -39,3 +39,7 @@ Do not attach a fictitious D1 database ID to production Wrangler configuration. 
 ## OCR model packaging and Cloudflare cost
 
 The prebuild step `node scripts/vendor-ocr.mjs` stages first-party Tesseract worker, core WASM and five language packs in `public/ocr/`. `wrangler.jsonc` bypasses the Worker script for `/ocr/*` so models are delivered as static assets instead of consuming per-request Worker compute. Cloudflare's current static asset per-file limit is 25 MiB; the script checks that limit. Verify with published deployment smoke checks that `/ocr/worker.min.js` and `/ocr/lang/eng.traineddata.gz` return real binary assets, not the SPA HTML shell. Because browsers download models on demand, users may incur initial model download traffic; all OCR inference remains local.
+
+## Production security and first-party OCR preflight
+
+Post-deploy `scripts/verify-deployment-assets.mjs` rejects an HTML response with no restrictive CSP, JavaScript/CSS asset version mismatches, or missing OCR worker/English model assets. `e2e/live.spec.ts` independently checks the deployed security headers and models. These steps only execute after an authorized owner-controlled deployment; the Phase 3 feature branch does not publish any new production version.

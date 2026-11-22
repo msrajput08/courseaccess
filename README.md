@@ -90,3 +90,7 @@ This is not active authentication, verified usage enforcement, a live payment se
 ### Self-hosted OCR engine assets
 
 First-use OCR downloads its browser worker, WASM core and selected language pack from the CourseAccess origin, not a third-party OCR inference API or CDN. The models are bundled from npm during `prebuild` and `predev` by `scripts/vendor-ocr.mjs`, with 25 MiB per-file safety checks; `public/ocr/` is generated and intentionally not committed. OCR recognition itself runs locally in the browser. The generated assets require real deployment verification before activating a new production version.
+
+### Worker security regression
+
+PR CI now includes an isolated local Cloudflare Worker browser gate (`npx playwright test --config=playwright.worker.config.ts`) so restrictive production CSP, OCR assets and real PDF import/export are tested together in addition to Vite browser tests. This is local runtime coverage, not proof of post-deployment compatibility on every browser.

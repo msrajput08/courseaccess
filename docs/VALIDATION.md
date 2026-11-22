@@ -49,3 +49,7 @@ Passing synthetic fixtures does not prove that arbitrary real-world files, scann
 ## Local OCR runtime regression
 
 Browser OCR exercises a real JPEG-based image-only PDF; the test now checks that the generated first-party Worker and English model are served from `/ocr/` and that the scan does not request the known external Tesseract model/worker CDNs. The staging script runs automatically before dev and production builds and refuses missing dependencies or any OCR asset larger than Cloudflare's 25 MiB per-file static asset cap. Browser tests on a feature branch do not verify deployed Cloudflare asset routing until a fresh owner-approved deployment and live smoke test.
+
+## Real Cloudflare Worker and CSP gate
+
+`playwright.worker.config.ts` starts `wrangler dev --local` against built static assets, rather than relying on Vite's unprotected development shell. `e2e/worker-security.spec.ts` then checks the actual Worker CSP/security headers, non-HTML OCR asset routes, successful client-side PDF import/HTML export, and real scanned-image OCR under the restrictive CSP without contacting known external Tesseract CDNs. The CI workflow exercises this test separately after the two-browser Vite suite. The release automation additionally requires production CSP and local OCR assets during post-deployment smoke verification. These gates verify technical functionality, not a formal security penetration test.

@@ -7,7 +7,7 @@
 - [ ] Inspect accessibility with keyboard and screen reader; run suitable formal validators on exported material.
 - [ ] Configure verified domain and VITE_PUBLIC_ORIGIN; inspect sitemap, robots, canonical and social links.
 - [ ] Add verified business contact, privacy/terms legal review, retention and support workflow.
-- [ ] Test CSP and security headers with the PDF.js worker.
+- [ ] Confirm real local Wrangler CSP regression passes and inspect deployed CSP/security headers after an authorized release.
 - [ ] Deploy only using an authorized Cloudflare account; verify successful deployment.
 - [ ] Keep all premium/AI account functionality disabled until signed provider integration and server-side permission checking are implemented.
 
@@ -15,7 +15,7 @@
 
 - [ ] Run representative licensed real-world DOCX, PPTX, XLSX, EPUB, ODF and academic PDF source/output comparisons, including reordered slides/sheets, merged cells, figure descriptions, complex equations and low-quality scans; record pass/fail evidence.
 - [ ] Inspect desktop/mobile visuals and use keyboard plus actual screen readers; automated axe/veraPDF results alone are insufficient.
-- [ ] Review and activate a tested Content-Security-Policy that supports offline/local PDF and OCR runtime assets; verify all production response headers.
+- [ ] Verify deployed Content-Security-Policy and same-origin PDF/OCR processing in a real browser; review CSP before adding any future payment provider origins.
 - [ ] Register and verify the final custom domain, canonical origin, sitemap and support contact; approve legal/privacy/retention text.
 - [ ] Provision and validate D1, security-reviewed passkey authentication, account deletion, institution ownership checks and durable quota enforcement before any paid functionality is enabled.
 - [ ] Confirm user-approved merge and deploy; run independent production smoke and accessible-export verification.
