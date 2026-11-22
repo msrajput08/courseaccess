@@ -26,6 +26,16 @@ describe('Cloudflare navigation shell cache policy',()=>{
       expect(assetCalls).toEqual([path]);
     }
   );
+  it('returns security and browser privacy headers on every public response',async()=>{
+    for(const route of ['/', '/checker', '/api/health', '/api/plans', '/sitemap.xml', '/robots.txt', '/assets/app-123.js']){
+      const response=await worker.fetch(new Request('https://example.workers.dev'+route),env);
+      expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(response.headers.get('x-frame-options')).toBe('DENY');
+      expect(response.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
+      expect(response.headers.get('cross-origin-resource-policy')).toBe('same-origin');
+      expect(response.headers.get('permissions-policy')).toContain('camera=()');
+    }
+  });
   it('does not turn hashed asset requests into HTML navigation shells',async()=>{
     assetCalls.length=0;
     const response=await worker.fetch(new Request('https://example.workers.dev/assets/app-123.js'),env);
