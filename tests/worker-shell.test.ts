@@ -48,6 +48,20 @@ describe('Cloudflare navigation shell cache policy',()=>{
     expect(response.headers.get('content-type')).toContain('javascript');
     expect(assetCalls).toEqual(['/assets/app-123.js']);
   });
+  it('fails closed for account and organization writes when no trusted D1 binding is configured',async()=>{
+    const origin='https://example.workers.dev';
+    const status=await worker.fetch(new Request(origin+'/api/auth/status'),env);
+    expect(await status.json()).toMatchObject({enabled:false,billingEnabled:false});
+    const registration=await worker.fetch(new Request(origin+'/api/auth/register/options',{
+      method:'POST',headers:{'content-type':'application/json',origin},
+      body:JSON.stringify({displayName:'Teacher Account'})
+    }),env);
+    expect(registration.status).toBe(503);
+    const orgs=await worker.fetch(new Request(origin+'/api/organizations'),env);
+    expect(orgs.status).toBe(503);
+    const accountShell=await worker.fetch(new Request(origin+'/account'),env);
+    expect(accountShell.headers.get('cache-control')).toMatch(/no-store/);
+  });
   it('keeps API health JSON and robots outside the shell',async()=>{
     assetCalls.length=0;
     const response=await worker.fetch(new Request('https://example.workers.dev/api/health'),env);
