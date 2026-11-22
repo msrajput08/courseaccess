@@ -40,18 +40,47 @@ export function requireSameOrigin(req:Request):void {
   if(source!==origin)throw new ApiError(403,'Request origin verification failed.');
   if(req.headers.get('sec-fetch-site')==='cross-site')throw new ApiError(403,'Cross-site requests are not allowed.');
 }
+/** Stream JSON with a hard byte ceiling. Calling req.text() first lets an
+ * untrusted request allocate arbitrarily large memory before checking length.
+ */
 export async function readBody(req:Request):Promise<Record<string,unknown>> {
   if(!/^application\/json(?:\s*;|$)/i.test(req.headers.get('content-type')||''))
     throw new ApiError(415,'JSON content type is required.');
-  if(Number(req.headers.get('content-length')||'0')>16_384)
+  const declared=Number(req.headers.get('content-length')||0);
+  if(!Number.isSafeInteger(declared)||declared<0||declared>16_384)
     throw new ApiError(413,'Request body exceeds limit.');
-  const value=await req.text();
-  if(value.length>16_384)throw new ApiError(413,'Request body exceeds limit.');
-  try {
-    const parsed:unknown=JSON.parse(value);
+  const reader=req.body?.getReader();
+  if(!reader)throw new ApiError(400,'JSON request body is required.');
+  const parts:Uint8Array[]=[];
+  let size=0;
+  try{
+    while(true){
+      const {done,value}=await reader.read();
+      if(done)break;
+      size+=value.byteLength;
+      if(size>16_384){
+        await reader.cancel().catch(()=>undefined);
+        throw new ApiError(413,'Request body exceeds limit.');
+      }
+      parts.push(value);
+    }
+  }finally{reader.releaseLock();}
+  const bytes=new Uint8Array(size);
+  let at=0;
+  for(const part of parts){bytes.set(part,at);at+=part.byteLength;}
+  let text:string;
+  try{text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}
+  catch{throw new ApiError(400,'Request body must use valid UTF-8.');}
+  try{
+    const parsed:unknown=JSON.parse(text);
     if(!parsed||Array.isArray(parsed)||typeof parsed!=='object')throw Error();
     return parsed as Record<string,unknown>;
   }catch{throw new ApiError(400,'Invalid JSON request.');}
+}
+export function requireRecentVerification(identity:{issued_at_ms:number}):void {
+  const age=Date.now()-identity.issued_at_ms;
+  if(!Number.isFinite(age)||age<0||age>600_000)
+    throw new ApiError(403,'Verify your passkey again to authorize this sensitive operation.');
 }
 export function safeName(value:unknown,max=140):string {
   if(typeof value!=='string')throw new ApiError(400,'Display name is required.');
@@ -95,6 +124,11 @@ export async function rateLimit(db:Database,req:Request,action:string,limit=50):
   const key=await sha256('courseaccess-rate-v1:'+action+':'+source);
   const now=Date.now(),bucket=Math.floor(now/3_600_000)*3_600_000;
   await db.prepare('INSERT INTO auth_rate_limits(bucket,window_start_ms,hits) VALUES(?,?,1) ON CONFLICT(bucket) DO UPDATE SET hits=CASE WHEN window_start_ms=excluded.window_start_ms THEN hits+1 ELSE 1 END,window_start_ms=excluded.window_start_ms').bind(key,bucket).run();
+  // Opportunistic cleanup with the indexed window column. Old hashed IP
+  // buckets must not accumulate forever; cleanup does not affect current limits.
+  if(crypto.getRandomValues(new Uint8Array(1))[0]===0)
+    await db.prepare('DELETE FROM auth_rate_limits WHERE window_start_ms<?')
+      .bind(bucket-48*3_600_000).run();
   const record=await db.prepare('SELECT hits FROM auth_rate_limits WHERE bucket=?').bind(key).first<{hits:number}>();
   if(!record||record.hits>limit)throw new ApiError(429,'Too many requests. Try again later.');
 }
