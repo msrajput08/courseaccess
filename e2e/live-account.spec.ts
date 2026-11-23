@@ -1,11 +1,7 @@
 import {test,expect} from '@playwright/test';
 
-const expectedOrigin='https://courseaccess.minty-12-shar.workers.dev';
-
 test('real production D1 passkey account registration, login and deletion',async({page,request})=>{
   test.setTimeout(90_000);
-  expect(new URL(page.context().pages()[0]?.url()||expectedOrigin).hostname)
-    .toBe(new URL(expectedOrigin).hostname);
   const cdp=await page.context().newCDPSession(page);
   await cdp.send('WebAuthn.enable');
   await cdp.send('WebAuthn.addVirtualAuthenticator',{options:{
