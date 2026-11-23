@@ -19,7 +19,8 @@
     "test:auth:worker": "playwright test --config=playwright.auth.config.ts",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "test:corpus": "playwright test --config=playwright.corpus.config.ts"
+    "test:corpus": "playwright test --config=playwright.corpus.config.ts",
+    "test:external-corpus": "playwright test --config=playwright.external.config.ts"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
