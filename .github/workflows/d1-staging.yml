@@ -27,7 +27,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Install pinned project dependencies and Wrangler
-        run: npm ci --no-audit --no-fund
+      - name: Install project dependencies and Wrangler
+        run: npm install --no-audit --no-fund
       - name: Create/inspect and migrate dedicated staging D1 only
         run: python3 scripts/d1_staging_provision.py
