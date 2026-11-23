@@ -20,7 +20,7 @@ SAMPLES=[
     ("domdomegg/sample-files","d2baa46a5927e00df94f95c6785cefd37d44b360","sample.xlsx","845dcfd518563fe6b66faf735146c9f574028bb9"),
     ("domdomegg/sample-files","d2baa46a5927e00df94f95c6785cefd37d44b360","sample1_small.pdf","00172f2664eeb926ac57e750ca6b58b6d3e889ac"),
     ("tinytoolkit-org/pdf-sample-files","4fd733c47ead5446b06372ab910cb78d1c7da55e","out/sample-corrupted.pdf","0d0807c30a1310f7d7ab6dca08776ceb2e345fca"),
-    ("tinytoolkit-org/pdf-sample-files","4fd733c47ead5446b06372ab910cb78d1c7da55e","out/sample-password-protected.pdf","acbb6ca2491ee5840755ed1b1e59fb5c11"),
+    ("tinytoolkit-org/pdf-sample-files","4fd733c47ead5446b06372ab910cb78d1c7da55e","out/sample-password-protected.pdf","acbb6ca2491ee5840755ed1b1b02de8b2cbd5c11"),
     ("tinytoolkit-org/pdf-sample-files","4fd733c47ead5446b06372ab910cb78d1c7da55e","out/sample-scanned.pdf","be086b3e2a18235a2d72c3b70a2ecd2733ad148f"),
 ]
 manifest={"sourceLicense":"CC0-1.0","authorization":"Public CC0 samples, original bytes unchanged","samples":[]}
