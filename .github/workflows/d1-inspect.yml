@@ -1,0 +1,70 @@
+name: Cloudflare D1 account permission inspection (no mutations)
+
+on:
+  push:
+    branches: [infra/d1-inspection]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: courseaccess-d1-inspect
+  cancel-in-progress: true
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Wrangler
+        run: npm install --no-audit --no-fund
+      - name: Verify scoped Cloudflare D1 access (read-only)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" || -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then
+            echo "::error::Missing Cloudflare deployment credentials"
+            exit 1
+          fi
+          npx wrangler d1 list --json > d1-audit.json
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const results=JSON.parse(readFileSync('d1-audit.json','utf8'));
+          if(!Array.isArray(results))throw new Error('Unexpected Cloudflare D1 API response');
+          const matches=results.filter(db=>/^courseaccess[-_]/i.test(db.name||''));
+          console.log('Cloudflare D1 permissions: verified for configured deployment account');
+          console.log('CourseAccess-prefixed databases:',matches.map(x=>x.name).join(', ')||'(none)');
+          console.log('Total accessible D1 databases:',results.length);
+          NODE
+      - name: Verify separately scoped D1 provisioning token (read-only probe)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_WRITE_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" || -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then
+            echo "::error::D1 Edit token or Cloudflare account ID is not configured"
+            exit 1
+          fi
+          npx wrangler d1 list --json > d1-write-audit.json
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const list=JSON.parse(readFileSync('d1-write-audit.json','utf8'));
+          if(!Array.isArray(list)) throw new Error('The D1 Edit token returned an unexpected response');
+          console.log('D1 Edit token authenticated against the configured Cloudflare account.');
+          console.log('D1 databases visible with Edit token:',list.length);
+          NODE
+      - name: Ensure audit values are not left in workspace
+        if: always()
+        run: rm -f d1-audit.json d1-write-audit.json
