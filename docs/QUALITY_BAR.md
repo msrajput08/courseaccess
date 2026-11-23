@@ -32,3 +32,17 @@ Reference documentation:
 6. A failed PDF/UA result is a product defect to prioritize, not a marketing label to hide.
 
 The independent PDF/UA-1 sample validation gate is now strict: any generated sample failure blocks CI and production deployment. The browser-produced basic and STEM samples have passed the current veraPDF profile. This is narrower than universal PDF/UA certification: robust coverage still requires larger real-document corpora, screen-reader walkthroughs, figure semantics and tests on arbitrarily complex source documents.
+
+## Phase 3 findings
+
+The loaded document editor failed an initial automated axe WCAG color contrast check on desktop and mobile despite public pages passing. The Phase 3 branch adds an editor-specific regression and increases text contrast without removing the visual design. Use the latest GitHub Actions result, not the existence of this code, to establish whether the correction passes.
+
+This change also tests Office source order and prevents silent paragraph/table clipping. It does **not** establish a certified PDF repair engine or prove native DOCX/PPTX/XLSX layout preservation.
+
+## Runtime provider-independence improvement
+
+Tesseract worker/core and five OCR language packs are now included as first-party static build assets. This removes a runtime requirement to access a third-party model CDN while preserving browser-local recognition. Network availability for first load and Cloudflare static delivery still matter. The build script fails if an OCR asset cannot be packaged under the Cloudflare 25 MiB/file cap. Browser regression checks are necessary but not a substitute for production load/performance benchmarking.
+
+### Vector and Office figure limitations
+
+The checker now inspects both PDF raster painting operations and PDF vector path construction/painting as **review prompts**. Lines, borders and decorations can generate a false-positive review reminder, while a complex figure can still escape heuristic detection. This is not image comprehension and does not infer accurate alt text. DOCX source image description metadata is copied into explicitly marked **source-provided, unverified** text for educators to review; the reading format does not pretend to reconstruct original image placement or figures.

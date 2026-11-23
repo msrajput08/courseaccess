@@ -115,6 +115,11 @@ test('tagged PDF reading export has real semantic PDF tags and searchable extrac
 });
 test('actual image-only PDF automatically runs OCR and recovers page text',async({page})=>{
   test.setTimeout(180000);
+  const externalOcrRequests:string[]=[];
+  page.on('request',request=>{
+    if(/cdn\.jsdelivr\.net|tessdata\.projectnaptha\.com|unpkg\.com/i.test(request.url()))
+      externalOcrRequests.push(request.url());
+  });
   await page.setContent('<html><body style="background:#fff;margin:0"><div id="scan" style="width:900px;height:260px;background:white;padding:25px;box-sizing:border-box;font-family:Arial;color:black"><div style="font-size:58px;font-weight:bold;line-height:1.4">ACCESSIBLE SCIENCE</div><div style="font-size:35px">Cell Biology Lecture Notes</div></div></body></html>');
   const jpeg=await page.locator('#scan').screenshot({type:'jpeg',quality:96});
   await page.goto('/checker');
@@ -124,6 +129,12 @@ test('actual image-only PDF automatically runs OCR and recovers page text',async
   });
   await expect(page.getByRole('heading',{name:'image-scan.pdf'})).toBeVisible({timeout:150000});
   await expect(page.getByText('OCR text recovered').first()).toBeVisible();
+  for(const path of ['/ocr/worker.min.js','/ocr/lang/eng.traineddata.gz']){
+    const asset=await page.request.get(path);
+    expect(asset.status(),path).toBe(200);
+    expect(Number(asset.headers()['content-length']||0),path).toBeGreaterThan(1000);
+  }
+  expect(externalOcrRequests).toEqual([]);
   await expect(page.locator('.preview-status')).toHaveCount(0);
   const samplePagePixels=async()=>page.locator('.pdf-canvas').evaluate((element)=>{
     const canvas=element as HTMLCanvasElement;

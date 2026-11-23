@@ -16,6 +16,13 @@ test('live routes, API and SEO respond from the published Worker', async ({page,
 
   const html=await request.get('/');
   expect(html.headers()['cache-control']).toMatch(/no-store/);
+  expect(html.headers()['content-security-policy']).toContain("default-src 'self'");
+  expect(html.headers()['x-frame-options']).toBe('DENY');
+  for(const path of ['/ocr/worker.min.js','/ocr/lang/eng.traineddata.gz']){
+    const file=await request.head(path);
+    expect(file.ok(),path).toBe(true);
+    expect(file.headers()['content-type']||'',path).not.toMatch(/text\/html/i);
+  }
   await page.goto('/');
   await expect(page.getByRole('heading',{name:/Better learning begins with access/i})).toBeVisible();
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href',new URL('/',testInfo.project.use.baseURL as string).toString());

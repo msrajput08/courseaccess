@@ -26,11 +26,41 @@ describe('Cloudflare navigation shell cache policy',()=>{
       expect(assetCalls).toEqual([path]);
     }
   );
+  it('returns security and browser privacy headers on every public response',async()=>{
+    for(const route of ['/', '/checker', '/api/health', '/api/plans', '/sitemap.xml', '/robots.txt', '/assets/app-123.js']){
+      const response=await worker.fetch(new Request('https://example.workers.dev'+route),env);
+      expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(response.headers.get('x-frame-options')).toBe('DENY');
+      expect(response.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
+      expect(response.headers.get('cross-origin-resource-policy')).toBe('same-origin');
+      expect(response.headers.get('permissions-policy')).toContain('camera=()');
+      const csp=response.headers.get('content-security-policy')||'';
+      expect(csp).toContain("default-src 'self'");
+      expect(csp).toContain("object-src 'none'");
+      expect(csp).toContain("worker-src 'self' blob:");
+      expect(csp).toContain("'wasm-unsafe-eval'");
+      expect(csp).not.toContain("'unsafe-eval'");
+    }
+  });
   it('does not turn hashed asset requests into HTML navigation shells',async()=>{
     assetCalls.length=0;
     const response=await worker.fetch(new Request('https://example.workers.dev/assets/app-123.js'),env);
     expect(response.headers.get('content-type')).toContain('javascript');
     expect(assetCalls).toEqual(['/assets/app-123.js']);
+  });
+  it('fails closed for account and organization writes when no trusted D1 binding is configured',async()=>{
+    const origin='https://example.workers.dev';
+    const status=await worker.fetch(new Request(origin+'/api/auth/status'),env);
+    expect(await status.json()).toMatchObject({enabled:false,billingEnabled:false});
+    const registration=await worker.fetch(new Request(origin+'/api/auth/register/options',{
+      method:'POST',headers:{'content-type':'application/json',origin},
+      body:JSON.stringify({displayName:'Teacher Account'})
+    }),env);
+    expect(registration.status).toBe(503);
+    const orgs=await worker.fetch(new Request(origin+'/api/organizations'),env);
+    expect(orgs.status).toBe(503);
+    const accountShell=await worker.fetch(new Request(origin+'/account'),env);
+    expect(accountShell.headers.get('cache-control')).toMatch(/no-store/);
   });
   it('keeps API health JSON and robots outside the shell',async()=>{
     assetCalls.length=0;

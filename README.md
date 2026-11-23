@@ -80,3 +80,23 @@ CourseAccess now processes Word DOCX, PowerPoint PPTX, Excel XLSX, OpenDocument 
 The source preview for non-PDF documents is an extracted-content preview, not a claim of pixel-perfect Office rendering. Complex visual diagrams and merged cells require source verification. Legacy binary DOC/PPT/XLS should be saved to current XML Office formats first.
 
 See [Multiformat import](docs/MULTIFORMAT.md) for supported formats and precise boundaries.
+
+## Pre-payment hardening branch
+
+Phase 3 adds source-order correctness for PPTX/XLSX/EPUB, explicit failure rather than silent text clipping, bounded CSV/XLSX continuation tables with true headers, real populated-workspace accessibility regression tests, self-hosted UI fonts and Worker security headers. A D1-compatible data model and local SQLite tests for accounts, institutions, session hashes and idempotent usage quotas are documented in [Pre-billing engineering](docs/PREBILLING.md).
+
+This is not active authentication, verified usage enforcement, a live payment service or arbitrary original-PDF retagging. The free browser-local checker remains functional without credentials or D1. Release gates are defined in [Validation](docs/VALIDATION.md) and the [Launch checklist](docs/LAUNCH_CHECKLIST.md).
+
+### Self-hosted OCR engine assets
+
+First-use OCR downloads its browser worker, WASM core and selected language pack from the CourseAccess origin, not a third-party OCR inference API or CDN. The models are bundled from npm during `prebuild` and `predev` by `scripts/vendor-ocr.mjs`, with 25 MiB per-file safety checks; `public/ocr/` is generated and intentionally not committed. OCR recognition itself runs locally in the browser. The generated assets require real deployment verification before activating a new production version.
+
+### Worker security regression
+
+PR CI now includes an isolated local Cloudflare Worker browser gate (`npx playwright test --config=playwright.worker.config.ts`) so restrictive production CSP, OCR assets and real PDF import/export are tested together in addition to Vite browser tests. This is local runtime coverage, not proof of post-deployment compatibility on every browser.
+
+## Optional passkey accounts (development branch)
+
+The Phase 3 branch now includes a real, disabled-by-default account service: passkeys/WebAuthn, hashed sessions, member-scoped institutional roles and deletion. It is served only when a verified HTTPS origin, a migrated Cloudflare D1 binding and `COURSEACCESS_ACCOUNTS_ENABLED=true` are explicitly configured. The current public deployment is still a local, account-free document checker. The `/account` page explains this gracefully when D1 is absent. No premium checkout or hosted documents exist.
+
+Use `npm run test:auth:worker` for real local D1 passkey virtual-authenticator tests, and `docs/PREBILLING.md` for production provisioning. Never use the fixture D1 identifier from `wrangler.auth.test.jsonc` in production. Full independent assistive-technology/user-document review remains a launch gate.

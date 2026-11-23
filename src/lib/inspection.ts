@@ -10,6 +10,7 @@ export interface PageEvidence {
   lineSizes?: number[];
   textItems: number;
   imagePaintCount: number;
+  vectorPaintCount?: number;
   linkAnnotationCount?: number;
   ocr?: PageOcr;
   structureTree: boolean | null;
@@ -54,6 +55,11 @@ export function detectFindings(page: PageEvidence): Finding[] {
   if (page.imagePaintCount > 0) {
     add('manual', 'review', 'visual', 'Review figure descriptions', page.imagePaintCount + ' image drawing operation(s) were detected. The presence or quality of alternative text cannot be determined here.', 'Check every meaningful figure for an accurate description and mark decorative images appropriately.');
   }
+  if ((page.vectorPaintCount||0)>0) {
+    add('manual','review','visual','Review vector artwork and diagrams',
+      page.vectorPaintCount+' vector drawing operation(s) were detected. These may be lines, decorations, diagrams or charts; no semantic figure meaning is inferred.',
+      'Inspect visual-only vector content and provide accurate alternatives for meaningful diagrams, charts and spatial relationships.');
+  }
   if (/\b(?:table\s*\d+|figure\s*\d+|fig\.\s*\d+)\b/i.test(text)) {
     add('manual', 'review', 'structure', 'Review referenced tables or figures', 'The text refers to a table or figure. Text extraction cannot establish usable table headers or a meaningful image description.', 'Check table header associations, caption context, and figure descriptions in the original.');
   }
@@ -70,7 +76,8 @@ export function detectFindings(page: PageEvidence): Finding[] {
 export function createBlocks(page: PageEvidence): EditableBlock[] {
   const validSizes = page.sizes.filter((n) => Number.isFinite(n) && n > 0 && n < 250).sort((a, b) => a - b);
   const baseline = validSizes.length ? validSizes[Math.floor(validSizes.length / 2)] : 0;
-  const lines = page.lines.map((line, i) => ({ text: line.trim(), size: page.lineSizes?.[i] || 0 })).filter((line) => line.text).slice(0,400);
+  const lines = page.lines.map((line, i) => ({ text: line.trim(), size: page.lineSizes?.[i] || 0 })).filter((line) => line.text);
+  if(lines.length>400)throw new Error('PDF page exceeds the 400-line safe reading-draft limit; split the source rather than exporting incomplete content.');
   const result: EditableBlock[] = [];
   for(let i=0;i<lines.length;) {
     const table=detectTableRows(lines.map(line=>line.text),i);
@@ -112,6 +119,7 @@ export function buildInspection(name: string, size: number, pages: PageEvidence[
     text: p.lines.join('\n'),
     textItemCount: p.textItems,
     imagePaintCount: p.imagePaintCount,
+    vectorPaintCount: p.vectorPaintCount,
     linkAnnotationCount: p.linkAnnotationCount,
     ocr: p.ocr,
     hasStructureTree: p.structureTree,

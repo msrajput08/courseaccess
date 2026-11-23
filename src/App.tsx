@@ -8,8 +8,9 @@ import { ACCEPTED_DOCUMENTS, FORMATS_HELP } from './lib/formats';
 import { OCR_LANGUAGES } from './lib/ocr';
 import type { Inspection, RecentRecord, OcrLanguage } from './types';
 import Workspace from './components/Workspace';
+import AccountPage from './components/AccountPage';
 
-type PageName='home'|'checker'|'pricing'|'dashboard'|'resources'|'privacy'|'terms';
+type PageName='home'|'checker'|'pricing'|'dashboard'|'resources'|'privacy'|'terms'|'account';
 type Route={page:PageName;slug?:string};
 const guides=[
   {slug:'pdf-accessibility-checker',category:'DOCUMENT REVIEW',title:'How to check a PDF for accessibility',description:'Automated checks are an informed beginning, not a conformance verdict.',sections:[['Start with measurable evidence','Check whether text is extractable from every page, and compare that extracted content with what is visually present. An empty text layer is worth investigating, but it does not by itself prove that the page is scanned.'],['Inspect what software cannot decide','Reading order, appropriate figure descriptions, navigable tables, heading hierarchy and accessible mathematics require specialist tools and human judgement.'],['Validate your corrected document','Repair the source document when possible, generate the new format and evaluate it with accessibility tools and assistive technology.']]},
@@ -18,11 +19,12 @@ const guides=[
   {slug:'math-accessibility',category:'STEM EDUCATION',title:'How to make mathematics accessible to students',description:'Accessible equations require preserving meaning, not just appearance.',sections:[['Respect the original notation','Text extraction can lose superscripts, fractions, matrices and spatial relationships. Never assume recovered symbols are complete.'],['Provide semantic alternatives','Where supported, use human-reviewed MathML or an appropriate accessible equation representation.'],['Use subject-matter review','Ask someone familiar with the subject to validate each transcription and description.']]},
   {slug:'academic-documents',category:'INCLUSIVE WORKFLOWS',title:'A repeatable academic document accessibility workflow',description:'Make inclusion part of writing, revising and distributing course material.',sections:[['Design from the beginning','Plan clear structure, meaningful links, accessible tables and descriptive visual material while drafting.'],['Review before publication','Inspect the final format for text extraction, navigation, structure and visual-content alternatives.'],['Keep a feedback channel','Give students an easy way to report a barrier and obtain a usable alternative.']]},
 ];
-const names:Record<PageName,string>={home:'Every lesson. Accessible to everyone.',checker:'Free multi-format document accessibility checker',pricing:'Pricing and access',dashboard:'Local workspace',resources:'Accessible teaching resources',privacy:'Privacy policy',terms:'Terms of use'};
+const names:Record<PageName,string>={home:'Every lesson. Accessible to everyone.',checker:'Free multi-format document accessibility checker',pricing:'Pricing and access',dashboard:'Local workspace',resources:'Accessible teaching resources',privacy:'Privacy policy',terms:'Terms of use',account:'Secure account and institution access'};
 function readRoute():Route {
   const path=location.pathname.replace(/\/$/,'')||'/';
   if(path.startsWith('/guides/'))return {page:'resources',slug:path.split('/')[2]};
   if(path==='/checker')return {page:'checker'};
+  if(path==='/account')return {page:'account'};
   if(path==='/pricing')return {page:'pricing'};
   if(path==='/workspace')return {page:'dashboard'};
   if(path==='/guides')return {page:'resources'};
@@ -37,11 +39,11 @@ function Header({go,page}:{go:(s:string)=>void;page:PageName}){
   const [open,setOpen]=useState(false);
   const nav=(href:string)=>{setOpen(false);go(href);};
   return <header className="site-header"><div className="shell header-inner"><A href="/" go={nav} className="brand"><span className="brand-mark"><BookOpenCheck size={20}/></span>Course<span>Access</span></A>
-    <nav aria-label="Main navigation" className={'nav '+(open?'open':'')}><A href="/checker" go={nav} className={page==='checker'?'selected':''}>The checker</A><A href="/#how" go={()=>{nav('/');setTimeout(()=>document.getElementById('how')?.scrollIntoView(),80);}}>How it works</A><A href="/guides" go={nav} className={page==='resources'?'selected':''}>Resources</A><A href="/pricing" go={nav} className={page==='pricing'?'selected':''}>Pricing</A></nav>
+    <nav aria-label="Main navigation" className={'nav '+(open?'open':'')}><A href="/checker" go={nav} className={page==='checker'?'selected':''}>The checker</A><A href="/#how" go={()=>{nav('/');setTimeout(()=>document.getElementById('how')?.scrollIntoView(),80);}}>How it works</A><A href="/guides" go={nav} className={page==='resources'?'selected':''}>Resources</A><A href="/pricing" go={nav} className={page==='pricing'?'selected':''}>Pricing</A><A href="/account" go={nav} className={page==='account'?'selected':''}>Account</A></nav>
     <div className="header-right"><A href="/workspace" go={nav} className="header-workspace">My workspace <ArrowUpRight size={15}/></A><A href="/checker" go={nav} className="button button-primary">Check a document <ArrowRight size={16}/></A></div><button type="button" aria-label={open?'Close navigation':'Open navigation'} aria-expanded={open} className="mobile-menu" onClick={()=>setOpen(v=>!v)}>{open?<X/>:<Menu/>}</button>
   </div></header>;
 }
-function Footer({go}:{go:(s:string)=>void}){return <footer className="footer"><div className="shell footer-layout"><div className="footer-about"><strong>Course<span>Access</span>.</strong><p>Every lesson. Accessible to everyone.</p><small>Tools for a more inclusive classroom.</small></div><div className="footer-links"><span>PRODUCT</span><A href="/checker" go={go}>Document checker</A><A href="/pricing" go={go}>Pricing</A><A href="/workspace" go={go}>Workspace</A></div><div className="footer-links"><span>COMPANY</span><A href="/guides" go={go}>Resources</A><A href="/privacy" go={go}>Privacy</A><A href="/terms" go={go}>Terms</A></div><div className="footer-bottom"><span>© {new Date().getFullYear()} CourseAccess · An accessibility aid, not a certification.</span><span>Made for educators everywhere.</span></div></div></footer>;}
+function Footer({go}:{go:(s:string)=>void}){return <footer className="footer"><div className="shell footer-layout"><div className="footer-about"><strong>Course<span>Access</span>.</strong><p>Every lesson. Accessible to everyone.</p><small>Tools for a more inclusive classroom.</small></div><div className="footer-links"><span>PRODUCT</span><A href="/checker" go={go}>Document checker</A><A href="/pricing" go={go}>Pricing</A><A href="/workspace" go={go}>Workspace</A><A href="/account" go={go}>Account</A></div><div className="footer-links"><span>COMPANY</span><A href="/guides" go={go}>Resources</A><A href="/privacy" go={go}>Privacy</A><A href="/terms" go={go}>Terms</A></div><div className="footer-bottom"><span>© {new Date().getFullYear()} CourseAccess · An accessibility aid, not a certification.</span><span>Made for educators everywhere.</span></div></div></footer>;}
 function Illustration(){
   const [after,setAfter]=useState(false);
   const reduce=useReducedMotion();
@@ -90,12 +92,13 @@ function Legal({kind}:{kind:'privacy'|'terms'}){
   return <main className="shell article"><div className="eyebrow"><i/> TRANSPARENCY MATTERS</div><h1>{kind==='privacy'?'Privacy, from the beginning.':'Clear expectations. Better outcomes.'}</h1><p className="lead">{kind==='privacy'?'CourseAccess is designed to keep the free inspection on your device.':'Inspection findings support human review; they do not replace it.'}</p><div className="article-body">{(kind==='privacy'?[
     ['Browser processing','PDF inspection, rendering, text editing and export run in your browser. Selected PDF bytes and extracted content are not transmitted to our own servers. They remain in memory until you leave or refresh the page.'],
     ['Optional local metadata','Only if you select Save metadata, your browser stores the document filename, date, page count and findings count in localStorage. Delete all saved summaries from the local workspace. The actual PDF and extracted text are not saved.'],
-    ['Third parties','Google Fonts can receive a normal font request. Web hosting providers may log technical page requests. This release has no analytics tracker, AI document processing, billing or cloud document storage.'],
+    ['Optional secure accounts','When the owner activates account service, Cloudflare D1 stores a display name, random account ID, passkey public credential material (never your biometric information), hashed session identifiers, organization memberships and usage metadata. You can delete an account from the account page. Institutional owners should transfer ownership or expect their organization directory to be deleted with their account.'],
+    ['Third parties','Site and OCR fonts are served from the application origin. Web hosting providers may record technical page requests. This product does not send original document bytes to its server for inspection. No third-party analytics or payment collection is enabled.'],
     ['Legal review required','Before a public commercial launch, the operator must add verified contact information, jurisdiction-specific disclosures and a retention policy; this page is not a finished legal privacy review.'],
   ]:[
     ['Service scope','CourseAccess provides local document observations and reviewable exports. Source import quality varies with structure and file format; formal accessibility conformance requires independent output validation.'],
     ['Responsible use','Inspect only material you have rights to process. Independently verify corrections and all output, especially complex layouts, tables and mathematics, before sharing.'],
-    ['Future features','No paid subscriptions, AI automation, accounts or cloud storage are enabled in this release.'],
+    ['Future features','Paid subscriptions, AI automation and hosted document storage are not enabled. Account and institutional features require a separately configured production database and WebAuthn origin.'],
     ['Legal review required','Commercial terms, liability, support contacts, governing law and operator identity must be reviewed by appropriate counsel before a commercial launch.'],
   ]).map(([heading,text])=><section key={heading}><h2>{heading}</h2><p>{text}</p></section>)}</div></main>;
 }
@@ -114,6 +117,7 @@ export default function App(){
     {route.page==='home'&&<Home go={go}/>}
     {route.page==='checker'&&(inspection&&file?<Workspace inspection={inspection} file={file} onNew={newCheck} onSaved={()=>setHistory(loadHistory())}/>:<Checker onDone={done}/>)}
     {route.page==='pricing'&&<Pricing go={go}/>}
+    {route.page==='account'&&<AccountPage/>}
     {route.page==='dashboard'&&<Dashboard go={go} history={history} onClear={()=>{clearHistory();setHistory([]);}}/>}
     {route.page==='resources'&&<Resources go={go} slug={route.slug}/>}
     {route.page==='privacy'&&<Legal kind="privacy"/>}

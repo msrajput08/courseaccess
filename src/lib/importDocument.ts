@@ -2,15 +2,18 @@ import type {DocumentFormat,EditableBlock,Finding,Inspection,OcrLanguage,PageIns
 import {PRODUCT} from '../config';
 import {detectDocumentFormat,ZIP_FORMATS,IMAGE_FORMATS} from './formats';
 import type {ImportedSection,SourceBlock} from './officeImport';
+import {chunkDelimitedRows,chunkTabularRows} from './tableChunks';
 
 export interface DocumentImportOptions {
   automaticOcr?:boolean;
   ocrLanguage?:OcrLanguage;
   onStage?:(message:string)=>void;
 }
-const semantic=(kind:SourceBlock['kind'],text:string,extra:Partial<SourceBlock>={}):SourceBlock=>({
-  kind,text:text.trim().slice(0,12000),...extra
-});
+const semantic=(kind:SourceBlock['kind'],text:string,extra:Partial<SourceBlock>={}):SourceBlock=>{
+  const content=text.trim();
+  if(content.length>12_000)throw new Error('A source text block exceeds 12,000 characters. Split the source instead of silently losing content.');
+  return {kind,text:content,...extra};
+};
 function partition(blocks:SourceBlock[],label='Document'):ImportedSection[]{
   if(blocks.length>16000)throw new Error('Too many content elements to inspect completely.');
   const result:ImportedSection[]=[];
@@ -21,24 +24,44 @@ function partition(blocks:SourceBlock[],label='Document'):ImportedSection[]{
   if(result.length>80)throw new Error('Document exceeds 80 logical sections. Split the source before importing.');
   return result;
 }
-/** RFC 4180 quoted CSV and TSV, preserving escaped double quotes and new lines. */
+/** RFC 4180 style CSV/TSV, with BOM, CRLF, escaped quotes and strict malformed-quote rejection. */
 export function parseDelimited(input:string,delimiter:','|'\t'):string[][]{
+  if(input.length>2_000_000)throw new Error('Delimited text exceeds the 2 MB character limit.');
+  const text=input.charCodeAt(0)===0xFEFF?input.slice(1):input;
   const rows:string[][]=[];
-  let row:string[]=[],value='',quoted=false;
-  for(let i=0;i<input.length;i++){
-    const c=input[i];
-    if(quoted){
-      if(c==='"'&&input[i+1]==='"'){value+='"';i++;}
-      else if(c==='"')quoted=false;
+  let row:string[]=[],value='';
+  let state:'start'|'plain'|'quoted'|'closed'='start';
+  const addField=()=>{
+    if(row.length>=128)throw new Error('Delimited data exceeds 128 supported columns.');
+    row.push(value);value='';state='start';
+  };
+  const addRow=()=>{
+    addField();rows.push(row);row=[];
+    if(rows.length>16000)throw new Error('Delimited data exceeds 16,000 supported rows.');
+  };
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(state==='quoted'){
+      if(c==='"'&&text[i+1]==='"'){value+='"';i++;}
+      else if(c==='"')state='closed';
       else value+=c;
-    }else if(c==='"'&&value==='')quoted=true;
-    else if(c===delimiter){row.push(value);value='';}
-    else if(c==='\n'){row.push(value.replace(/\r$/,''));rows.push(row);row=[];value='';}
-    else value+=c;
+      continue;
+    }
+    if(c===delimiter){addField();continue;}
+    if(c==='\n'||c==='\r'){
+      if(c==='\r'&&text[i+1]==='\n')i++;
+      addRow();continue;
+    }
+    if(state==='closed')throw new Error('Malformed CSV/TSV: unexpected characters after a closing quote.');
+    if(c==='"'){
+      if(state!=='start')throw new Error('Malformed CSV/TSV: a quote appeared inside an unquoted field.');
+      state='quoted';continue;
+    }
+    value+=c;state='plain';
   }
-  if(quoted)throw new Error('The CSV file has an unclosed quoted field.');
-  if(value.length||row.length){row.push(value.replace(/\r$/,''));rows.push(row);}
-  return rows.filter(r=>r.some(v=>v.trim()));
+  if(state==='quoted')throw new Error('Malformed CSV/TSV: unclosed quoted field.');
+  if(value.length||row.length||state==='closed')addRow();
+  return rows;
 }
 function textSections(text:string,format:DocumentFormat):ImportedSection[]{
   const input=text.replace(/\u0000/g,'');
@@ -49,13 +72,14 @@ function textSections(text:string,format:DocumentFormat):ImportedSection[]{
     if(rows.length>16000)throw new Error('Spreadsheet exceeds the supported row count.');
     const cols=Math.max(1,...rows.map(r=>r.length));
     const sections:ImportedSection[]=[];
-    for(let col=0;col<cols;col+=16)for(let start=0;start<rows.length;start+=190){
-      const slice=rows.slice(start,start+190).map(row=>
-        Array.from({length:Math.min(16,cols-col)},(_,c)=>(row[col+c]||'').slice(0,750)));
-      const content=slice.map(row=>row.join('\t')).join('\n');
-      sections.push({label:'Data rows '+(start+1)+'–'+(start+slice.length),imageCount:0,
-        blocks:[semantic(slice.length>=2&&slice[0].length>=2?'table':'paragraph',content,{
-          description:'Imported '+format.toUpperCase()+' data'})]});
+    for(let col=0;col<cols;col+=16){
+      const width=Math.min(16,cols-col);
+      const columnRows=rows.map(row=>Array.from({length:width},(_,offset)=>row[col+offset]||''));
+      for(const chunk of (width>=2&&rows.length>=2?chunkTabularRows(columnRows):chunkDelimitedRows(columnRows))){
+        sections.push({label:'Data rows '+(chunk.start+1)+'–'+chunk.end,imageCount:0,
+          blocks:[semantic(width>=2&&rows.length>=2?'table':'paragraph',chunk.text,{
+            description:'Imported '+format.toUpperCase()+' data'})]});
+      }
     }
     if(sections.length>80)throw new Error('Spreadsheet exceeds 80 sections. Split it for full inspection.');
     return sections.length?sections:partition([],format.toUpperCase()+' data');

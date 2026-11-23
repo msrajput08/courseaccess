@@ -22,6 +22,13 @@ describe('real OCR routing and evidence',()=>{
     expect(normalizeOcrResult('hin','कक्षा का पाठ',80).ocr.language).toBe('hin');
   });
 
+  it('marks very long OCR transcripts unavailable instead of falsely returning the first 400 lines',()=>{
+    const source=Array.from({length:401},(_,i)=>'Verified source line '+i).join('\n');
+    const report=normalizeOcrResult('eng',source,95);
+    expect(report.ocr.status).toBe('failed');
+    expect(report.lines).toEqual([]);
+    expect(report.ocr.characters).toBe(0);
+  });
   it('normalizes valid OCR word geometry and drops invalid low-confidence positions',()=>{
     const raw=[{paragraphs:[{lines:[{words:[
       {text:'Biology',confidence:91,bbox:{x0:30,y0:20,x1:160,y1:50}},

@@ -143,3 +143,241 @@ test('plain TXT, RTF and TSV are treated as readable documents, not PDFs',async(
     await expect(page.getByRole('region',{name:/Imported source content/})).toBeVisible();
   }
 });
+
+test('long XLSX table import keeps the final rows in the exported HTML instead of clipping the first block',async({page})=>{
+  const archive=new JSZip();
+  const rows=Array.from({length:150},(_,i)=>{
+    const n=i+1;
+    const detail='Course description '+n+' '+('x'.repeat(120));
+    return '<row r="'+n+'"><c r="A'+n+'" t="inlineStr"><is><t>Student '+n+'</t></is></c>'+
+      '<c r="B'+n+'" t="inlineStr"><is><t>'+detail+'</t></is></c></row>';
+  }).join('');
+  archive.file('xl/workbook.xml',workbookXml);
+  archive.file('xl/worksheets/sheet1.xml','<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+rows+'</sheetData></worksheet>');
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'long-course.xlsx',
+    buffer:await archive.generateAsync({type:'nodebuffer',compression:'DEFLATE'}),
+    mimeType:'application/octet-stream',
+  });
+  await expect(page.getByRole('heading',{name:'long-course.xlsx'})).toBeVisible({timeout:30000});
+  const pending=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export HTML'}).click();
+  const html=await readFile(await (await pending).path(),'utf8');
+  expect(html).toContain('Student 1');
+  expect(html).toContain('Student 150');
+  expect(html).toContain('Course description 150 '+('x'.repeat(120)));
+  expect((html.match(/<table>/g)||[]).length).toBeGreaterThan(1);
+});
+test('malformed CSV fails visibly before creating a truncated workspace',async({page})=>{
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'broken.csv',buffer:Buffer.from('Student,Grade\n"Taylor"x,95'),
+    mimeType:'text/csv',
+  });
+  await expect(page.getByRole('alert')).toContainText(/closing quote/i);
+  await expect(page.getByRole('heading',{name:'broken.csv'})).toHaveCount(0);
+});
+test('oversized Word paragraph is rejected explicitly, never silently cut',async({page})=>{
+  const zip=new JSZip();
+  const word='<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>'+
+    'X'.repeat(12_100)+'</w:t></w:r></w:p></w:body></w:document>';
+  zip.file('word/document.xml',word);
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'oversized-paragraph.docx',
+    buffer:await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'}),
+    mimeType:'application/octet-stream',
+  });
+  await expect(page.getByRole('alert')).toContainText(/12,000 characters/i);
+  await expect(page.getByRole('heading',{name:'oversized-paragraph.docx'})).toHaveCount(0);
+});
+
+
+test('OpenDocument repeated nonempty table rows survive in semantic HTML, excluding empty formatting rows',async({page})=>{
+  const zip=new JSZip();
+  zip.file('content.xml', '<?xml version="1.0"?>'+
+    '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '+
+    'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" '+
+    'xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">'+
+    '<office:body><office:spreadsheet><table:table table:name="Attendance">'+
+    '<table:table-row><table:table-cell><text:p>Student</text:p></table:table-cell>'+
+    '<table:table-cell><text:p>Attended</text:p></table:table-cell></table:table-row>'+
+    '<table:table-row table:number-rows-repeated="3">'+
+    '<table:table-cell><text:p>Class A</text:p></table:table-cell>'+
+    '<table:table-cell><text:p>Yes</text:p></table:table-cell></table:table-row>'+
+    '<table:table-row table:number-rows-repeated="1000000">'+
+    '<table:table-cell/><table:table-cell/></table:table-row>'+
+    '</table:table></office:spreadsheet></office:body></office:document-content>');
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'attendance.ods',
+    buffer:await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'}),
+    mimeType:'application/octet-stream'
+  });
+  await expect(page.getByRole('heading',{name:'attendance.ods'})).toBeVisible({timeout:30000});
+  const download=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export HTML'}).click();
+  const html=await readFile(await (await download).path(),'utf8');
+  expect(html).toContain('<th scope="col">Student</th>');
+  expect((html.match(/<td>Class A<\/td>/g)||[]).length).toBe(3);
+  expect((html.match(/<td>Yes<\/td>/g)||[]).length).toBe(3);
+});
+test('OpenDocument repeated content beyond 200 rows fails visibly rather than dropping content',async({page})=>{
+  const zip=new JSZip();
+  zip.file('content.xml','<?xml version="1.0"?>'+
+    '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '+
+    'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" '+
+    'xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">'+
+    '<office:body><office:spreadsheet><table:table table:name="Oversized">'+
+    '<table:table-row table:number-rows-repeated="201">'+
+    '<table:table-cell><text:p>Data</text:p></table:table-cell>'+
+    '<table:table-cell><text:p>Retained</text:p></table:table-cell>'+
+    '</table:table-row></table:table></office:spreadsheet></office:body></office:document-content>');
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'oversized.ods',
+    buffer:await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'}),
+    mimeType:'application/octet-stream'
+  });
+  await expect(page.getByRole('alert')).toContainText(/200 content rows/i);
+  await expect(page.getByRole('heading',{name:'oversized.ods'})).toHaveCount(0);
+});
+test('HTML visible text excludes embedded script, style and intentionally hidden fragments',async({page})=>{
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'hidden-content.html',
+    mimeType:'text/html',
+    buffer:Buffer.from('<html><body><main><h2>Lecture notes</h2>'+
+      '<p>Visible <b>important</b> text<script>INJECTED_SCRIPT</script><span hidden>HIDDEN_PAYLOAD</span>'+
+      '<span aria-hidden="true">ARIA_HIDDEN</span><span style="display: none">CSS_HIDDEN</span>'+
+      '<style>.x{display:none} HIDDEN_CSS</style></p></main></body></html>')
+  });
+  await expect(page.getByRole('heading',{name:'hidden-content.html'})).toBeVisible();
+  const pending=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export HTML'}).click();
+  const html=await readFile(await (await pending).path(),'utf8');
+  expect(html).toContain('Visible important text');
+  for(const hidden of ['INJECTED_SCRIPT','HIDDEN_PAYLOAD','ARIA_HIDDEN','CSS_HIDDEN','HIDDEN_CSS'])
+    expect(html).not.toContain(hidden);
+});
+test('merged HTML tables reject invalid accessible header relationships',async({page})=>{
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'merged-table.html',
+    mimeType:'text/html',
+    buffer:Buffer.from('<main><table><tr><th colspan="2">Result</th></tr>'+
+      '<tr><td>Class</td><td>Score</td></tr></table></main>')
+  });
+  await expect(page.getByRole('alert')).toContainText(/Merged HTML table cells/i);
+  await expect(page.getByRole('heading',{name:'merged-table.html'})).toHaveCount(0);
+});
+
+
+test('DOCX reading copies retain referenced Word footnotes and endnotes in document order',async({page})=>{
+  const zip=new JSZip();
+  const word='<?xml version="1.0"?>'+
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+
+    '<w:p><w:r><w:t>Foundational research methods</w:t></w:r><w:r><w:footnoteReference w:id="2"/></w:r></w:p>'+
+    '<w:p><w:r><w:t>Further experimental evidence</w:t></w:r><w:r><w:endnoteReference w:id="4"/></w:r></w:p>'+
+    '</w:body></w:document>';
+  const notes=(kind:string,id:number,content:string)=>
+    '<?xml version="1.0"?><w:'+kind+'s xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'+
+    '<w:'+kind+' w:id="'+id+'"><w:p><w:r><w:t>'+content+'</w:t></w:r></w:p></w:'+kind+'></w:'+kind+'s>';
+  zip.file('word/document.xml',word);
+  zip.file('word/footnotes.xml',notes('footnote',2,'Original footnote citation details'));
+  zip.file('word/endnotes.xml',notes('endnote',4,'Original endnote research context'));
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'notes.docx',mimeType:'application/octet-stream',
+    buffer:await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'}),
+  });
+  await expect(page.getByRole('heading',{name:'notes.docx'})).toBeVisible({timeout:30000});
+  const pending=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export HTML'}).click();
+  const html=await readFile(await (await pending).path(),'utf8');
+  expect(html).toContain('Foundational research methods');
+  expect(html).toContain('Footnote 2: Original footnote citation details');
+  expect(html).toContain('Further experimental evidence');
+  expect(html).toContain('Endnote 4: Original endnote research context');
+  expect(html.indexOf('Foundational research methods')).toBeLessThan(html.indexOf('Footnote 2'));
+  expect(html.indexOf('Further experimental evidence')).toBeLessThan(html.indexOf('Endnote 4'));
+});
+test('unresolved DOCX footnote references fail before incomplete export',async({page})=>{
+  const zip=new JSZip();
+  zip.file('word/document.xml','<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'+
+    '<w:body><w:p><w:r><w:t>Unresolved source note</w:t></w:r>'+
+    '<w:r><w:footnoteReference w:id="21"/></w:r></w:p></w:body></w:document>');
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'unresolved.docx',mimeType:'application/octet-stream',
+    buffer:await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'}),
+  });
+  await expect(page.getByRole('alert')).toContainText(/footnote reference 21.*not be resolved/i);
+  await expect(page.getByRole('heading',{name:'unresolved.docx'})).toHaveCount(0);
+});
+test('merged DOCX tables and unsupported Office Math formulas fail closed',async({page})=>{
+  const make=async(content:string)=>{
+    const zip=new JSZip();
+    zip.file('word/document.xml','<?xml version="1.0"?>'+
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '+
+      'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><w:body>'+content+'</w:body></w:document>');
+    return zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'});
+  };
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'merged.docx',mimeType:'application/octet-stream',
+    buffer:await make('<w:tbl><w:tr><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr>'+
+      '<w:p><w:r><w:t>Merged academic header</w:t></w:r></w:p></w:tc></w:tr></w:tbl>')
+  });
+  await expect(page.getByRole('alert')).toContainText(/Merged or nested Word tables/i);
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'math.docx',mimeType:'application/octet-stream',
+    buffer:await make('<w:p><m:oMath><m:r><m:t>E=mc2</m:t></m:r></m:oMath></w:p>')
+  });
+  await expect(page.getByRole('alert')).toContainText(/Office Math formulas/i);
+});
+test('Excel preserves formula expressions alongside cached results and refuses missing shared strings',async({page})=>{
+  const excel=async(worksheet:string)=>{
+    const zip=new JSZip();
+    zip.file('xl/workbook.xml',workbookXml);
+    zip.file('xl/worksheets/sheet1.xml','<?xml version="1.0"?>'+
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+      '<sheetData>'+worksheet+'</sheetData></worksheet>');
+    return zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'});
+  };
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'formula.xlsx',mimeType:'application/octet-stream',
+    buffer:await excel('<row r="1"><c r="A1" t="inlineStr"><is><t>Formula</t></is></c>'+
+      '<c r="B1" t="inlineStr"><is><t>Value</t></is></c></row>'+
+      '<row r="2"><c r="A2" t="inlineStr"><is><t>Average</t></is></c>'+
+      '<c r="B2"><f>AVERAGE(C2:C3)</f><v>47</v></c></row>')
+  });
+  await expect(page.getByRole('heading',{name:'formula.xlsx'})).toBeVisible({timeout:30000});
+  const pending=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export HTML'}).click();
+  const html=await readFile(await (await pending).path(),'utf8');
+  expect(html).toContain('=AVERAGE(C2:C3) [cached result: 47]');
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'missing-string.xlsx',mimeType:'application/octet-stream',
+    buffer:await excel('<row r="1"><c r="A1" t="s"><v>99</v></c></row>')
+  });
+  await expect(page.getByRole('alert')).toContainText(/missing or invalid shared string/i);
+});
+test('quoted CSV line breaks and tabs remain inside accessible table cells',async({page})=>{
+  await page.goto('/checker');
+  await page.locator('input[type=file]').setInputFiles({
+    name:'research.csv',mimeType:'text/csv',
+    buffer:Buffer.from('Student,Notes\nAda,"First line\nSecond line\twith tab"\nBea,Complete'),
+  });
+  await expect(page.getByRole('heading',{name:'research.csv'})).toBeVisible({timeout:30000});
+  const pending=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export HTML'}).click();
+  const html=await readFile(await (await pending).path(),'utf8');
+  expect(html).toContain('<th scope="col">Student</th>');
+  expect(html).toContain('First line\u2028Second line\u2003with tab');
+  expect((html.match(/<tr>/g)||[]).length).toBe(3);
+});

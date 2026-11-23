@@ -1,11 +1,19 @@
 import JSZip from 'jszip';
 import type {EditableBlock,DocumentFormat} from '../types';
+import {chunkDelimitedRows,chunkTabularRows} from './tableChunks';
 
 export type SourceBlock=Pick<EditableBlock,'kind'|'text'|'headingLevel'|'description'>;
 export interface ImportedSection {label:string;blocks:SourceBlock[];imageCount:number;notes?:string[]}
 
 const MAX_ENTRIES=2500,MAX_XML_BYTES=12_000_000,MAX_UNPACKED=64_000_000,MAX_SECTIONS=80;
-const paragraph=(text:string,kind:SourceBlock['kind']='paragraph',extra:Partial<SourceBlock>={}):SourceBlock=>({kind,text:text.trim().slice(0,12000),...extra});
+const WORD_NS='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const DRAWING_NS='http://schemas.openxmlformats.org/drawingml/2006/main';
+
+const paragraph=(text:string,kind:SourceBlock['kind']='paragraph',extra:Partial<SourceBlock>={}):SourceBlock=>{
+  const content=text.trim();
+  if(content.length>12_000)throw new Error('A document content block exceeds 12,000 characters. Split the source instead of silently losing content.');
+  return {kind,text:content,...extra};
+};
 const elementChildren=(node:Node,name?:string):Element[]=>
   Array.from(node.childNodes).filter((n):n is Element=>n.nodeType===1 && (!name||(n as Element).localName===name));
 const descendants=(node:Element|Document,name:string):Element[]=>
@@ -28,16 +36,22 @@ function wordText(node:Element):string {
   const walk=(n:Node)=>{
     if(n.nodeType!==1)return;
     const e=n as Element;
-    if(e.localName==='t' && e.prefix==='w'){output+=e.textContent||'';return;}
-    if(e.localName==='tab' && e.prefix==='w'){output+='\t';return;}
-    if(e.localName==='br' && e.prefix==='w'){output+='\n';return;}
+    if(e.localName==='t' && e.namespaceURI===WORD_NS){output+=e.textContent||'';return;}
+    if(e.localName==='tab' && e.namespaceURI===WORD_NS){output+='\t';return;}
+    if(e.localName==='br' && e.namespaceURI===WORD_NS){output+='\n';return;}
     for(const child of Array.from(e.childNodes))walk(child);
   };
   walk(node);
   return output.trim();
 }
+function wordImageDescriptions(node:Element):string[]{
+  return descendants(node,'docPr').map(element=>
+    element.getAttribute('descr')||element.getAttribute('title')||'').map(s=>s.trim()).filter(Boolean);
+}
 function push(b:SourceBlock[],block:SourceBlock){
-  if(block.text && b.length<16000)b.push(block);
+  if(!block.text)return;
+  if(b.length>=16000)throw new Error('Document exceeds 16,000 content elements. Split the source instead of silently losing content.');
+  b.push(block);
 }
 function ensureSections(sections:ImportedSection[]):ImportedSection[] {
   if(!sections.length)throw new Error('No readable document sections were found.');
@@ -88,30 +102,116 @@ const filesIn=(zip:JSZip,regex:RegExp)=>Object.keys(zip.files).filter(p=>regex.t
   const num=(v:string)=>Number(v.match(/(\d+)(?:\.\w+)$/)?.[1]||0);
   return num(a)-num(b)||a.localeCompare(b);
 });
-function parseWord(doc:Document):ImportedSection[]{
+/** Resolve an Open Packaging Convention relative target without allowing archive traversal. */
+export function archiveTarget(sourcePart:string,target:string):string {
+  if(!target || /[\?#\\]/.test(target) || /^[a-z][a-z0-9+.-]*:/i.test(target))
+    throw new Error('Unsupported external or unsafe document relationship target.');
+  let decoded:string;
+  try{decoded=decodeURIComponent(target);}
+  catch{throw new Error('Malformed document relationship target.');}
+  if(/[\?#\\]/.test(decoded)||/^[a-z][a-z0-9+.-]*:/i.test(decoded))
+    throw new Error('Unsafe document relationship target.');
+  const parts=(decoded.startsWith('/')?decoded.slice(1):sourcePart.slice(0,sourcePart.lastIndexOf('/')+1)+decoded).split('/');
+  const normalized:string[]=[];
+  for(const segment of parts){
+    if(!segment||segment==='.')continue;
+    if(segment==='..'){
+      if(!normalized.length)throw new Error('Document relationship escapes the archive root.');
+      normalized.pop();continue;
+    }
+    if(segment.includes('\0'))throw new Error('Unsafe document relationship path.');
+    normalized.push(segment);
+  }
+  if(!normalized.length)throw new Error('Empty document relationship target.');
+  return normalized.join('/');
+}
+function relationships(zip:JSZip,part:string,xml:string):Map<string,string> {
+  const location=part.slice(0,part.lastIndexOf('/')+1)+'_rels/'+part.slice(part.lastIndexOf('/')+1)+'.rels';
+  const rels=zip.file(location);
+  if(!rels)return new Map();
+  // Value is loaded by caller so all XML errors use the same safe XML parser.
+  const xmlDocument=parseXml(xml);
+  const map=new Map<string,string>();
+  for(const rel of descendants(xmlDocument,'Relationship')){
+    const id=attr(rel,'Id');
+    if(!id || map.has(id))throw new Error('Invalid or duplicated document relationship ID.');
+    if(attr(rel,'TargetMode').toLowerCase()==='external')continue;
+    const target=attr(rel,'Target');
+    map.set(id,archiveTarget(part,target));
+  }
+  return map;
+}
+async function readRelationships(zip:JSZip,part:string):Promise<Map<string,string>|null>{
+  const location=part.slice(0,part.lastIndexOf('/')+1)+'_rels/'+part.slice(part.lastIndexOf('/')+1)+'.rels';
+  if(!zip.file(location))return null;
+  return relationships(zip,part,await readZip(zip,location));
+}
+
+async function wordNoteReferences(zip:JSZip,kind:'footnote'|'endnote'):Promise<Map<string,string>>{
+  const xml=await readZip(zip,'word/'+kind+'s.xml',false);
+  const notes=new Map<string,string>();
+  if(!xml)return notes;
+  const doc=parseXml(xml);
+  for(const note of descendants(doc,kind)){
+    const id=attr(note,'id');
+    if(!id||notes.has(id))throw new Error('Word notes contain missing or duplicated identifiers.');
+    if(descendants(note,'tbl').length||descendants(note,'drawing').length||descendants(note,'oMath').length)
+      throw new Error('A Word '+kind+' includes a complex table, drawing or formula that cannot be safely reconstructed.');
+    const paragraphs=descendants(note,'p').map(wordText).filter(Boolean);
+    if(paragraphs.length)notes.set(id,paragraphs.join(' '));
+  }
+  return notes;
+}
+function parseWord(doc:Document,footnotes:Map<string,string>,endnotes:Map<string,string>):ImportedSection[]{
   const body=first(doc,'body');
   if(!body)throw new Error('The Word document has no body.');
   const blocks:SourceBlock[]=[];
   let imageCount=0;
+  if(descendants(body,'oMath').length)throw new Error('This Word document contains Office Math formulas; lossless mathematical notation cannot be recovered by the current importer.');
+  const addReferencedNotes=(node:Element)=>{
+    for(const [kind,lookup] of [
+      ['footnote',footnotes],['endnote',endnotes],
+    ] as const){
+      for(const ref of descendants(node,kind+'Reference')){
+        const id=attr(ref,'id'),note=lookup.get(id);
+        if(!note)throw new Error('Word '+kind+' reference '+id+' could not be resolved without losing source content.');
+        push(blocks,paragraph((kind==='footnote'?'Footnote ':'Endnote ')+id+': '+note));
+      }
+    }
+  };
   const handle=(node:Element)=>{
     if(node.localName==='p'){
       imageCount+=descendants(node,'drawing').length+descendants(node,'pict').length;
       const value=wordText(node);
-      if(!value)return;
-      const pPr=elementChildren(node,'pPr')[0];
-      const style=attr(pPr?first(pPr,'pStyle'):null,'val');
-      const level=Number(style.match(/Heading(\d+)/i)?.[1]||0);
-      const list=Boolean(pPr&&(first(pPr,'numPr')||/^List/i.test(style)));
-      const kind:SourceBlock['kind']=list?'list':level||/^Title$/i.test(style)?'heading':'paragraph';
-      push(blocks,paragraph(value,kind,kind==='heading'?{headingLevel:(Math.min(4,Math.max(2,level||2)) as 2|3|4)}:{}));
+      if(value){
+        const pPr=elementChildren(node,'pPr')[0];
+        const style=attr(pPr?first(pPr,'pStyle'):null,'val');
+        const level=Number(style.match(/Heading(\d+)/i)?.[1]||0);
+        const list=Boolean(pPr&&(first(pPr,'numPr')||/^List/i.test(style)));
+        const kind:SourceBlock['kind']=list?'list':level||/^Title$/i.test(style)?'heading':'paragraph';
+        push(blocks,paragraph(value,kind,kind==='heading'?{headingLevel:(Math.min(4,Math.max(2,level||2)) as 2|3|4)}:{}));
+      }
+      for(const description of wordImageDescriptions(node))
+        push(blocks,paragraph('Source image alternative text (verify): '+description));
+      addReferencedNotes(node);
     }else if(node.localName==='tbl'){
-      const rows=directCells(node,'tr','tc').map(row=>row.map(cell=>
-        descendants(cell,'p').map(p=>wordText(p)).filter(Boolean).join(' ').slice(0,750)));
+      const cells=directCells(node,'tr','tc');
+      const merged=cells.some(row=>row.some(cell=>{
+        const properties=elementChildren(cell,'tcPr')[0];
+        return properties && (first(properties,'gridSpan')||first(properties,'vMerge')||first(properties,'hMerge'));
+      }));
+      if(merged||descendants(node,'tbl').length)
+        throw new Error('Merged or nested Word tables cannot yet be mapped to a safe accessible table. Simplify the table in Word before importing.');
+      const rows=cells.map(row=>row.map(cell=>
+        descendants(cell,'p').map(p=>wordText(p)).filter(Boolean).join(' ')));
       const width=rows[0]?.length||0;
       if(width>=2 && width<=16 && rows.length>=2 && rows.length<=200 && rows.every(r=>r.length===width))
         push(blocks,paragraph(rows.map(row=>row.join('\t')).join('\n'),'table',{description:'Imported table from Word'}));
       else for(const row of rows)push(blocks,paragraph(row.join(' | ')));
       imageCount+=descendants(node,'drawing').length;
+      for(const description of wordImageDescriptions(node))
+        push(blocks,paragraph('Source image alternative text (verify): '+description));
+      addReferencedNotes(node);
     }else if(node.localName==='sdt'){
       const content=first(node,'sdtContent');
       if(content)for(const child of elementChildren(content))handle(child);
@@ -129,9 +229,9 @@ function pptShapes(doc:Document,label:string):ImportedSection{
     if(child.localName==='sp'){
       const placeholder=first(child,'ph');
       const role=attr(placeholder,'type');
-      const paragraphs=descendants(child,'p').filter(p=>p.prefix==='a');
+      const paragraphs=descendants(child,'p').filter(p=>p.namespaceURI===DRAWING_NS);
       for(const p of paragraphs){
-        const value=descendants(p,'t').filter(n=>n.prefix==='a').map(textOf).join(' ').trim();
+        const value=descendants(p,'t').filter(n=>n.namespaceURI===DRAWING_NS).map(textOf).join(' ').trim();
         if(!value)continue;
         const isTitle=/title/i.test(role);
         const list=Boolean(first(p,'buChar')||first(p,'buAutoNum'));
@@ -142,13 +242,13 @@ function pptShapes(doc:Document,label:string):ImportedSection{
       const tables=descendants(child,'tbl');
       for(const table of tables){
         const rows=directCells(table,'tr','tc').map(row=>row.map(cell=>
-          descendants(cell,'t').map(textOf).filter(Boolean).join(' ').slice(0,750)));
+          descendants(cell,'t').map(textOf).filter(Boolean).join(' ')));
         if(rows.length>=2&&rows.length<=200&&rows[0].length>=2&&rows[0].length<=16&&rows.every(r=>r.length===rows[0].length))
           push(blocks,paragraph(rows.map(row=>row.join('\t')).join('\n'),'table',{description:'Table on '+label}));
         else for(const row of rows)push(blocks,paragraph(row.join(' | ')));
       }
     }else if(child.localName==='grpSp'){
-      for(const p of descendants(child,'p').filter(n=>n.prefix==='a')){
+      for(const p of descendants(child,'p').filter(n=>n.namespaceURI===DRAWING_NS)){
         const value=descendants(p,'t').map(textOf).join(' ');
         push(blocks,paragraph(value));
       }
@@ -160,8 +260,26 @@ function pptShapes(doc:Document,label:string):ImportedSection{
   return {label,blocks,imageCount};
 }
 async function parsePresentation(zip:JSZip):Promise<ImportedSection[]> {
-  const slides=filesIn(zip,/^ppt\/slides\/slide\d+\.xml$/);
+  let slides=filesIn(zip,/^ppt\/slides\/slide\d+\.xml$/);
   if(!slides.length)throw new Error('No presentation slides were found.');
+  const present=await readZip(zip,'ppt/presentation.xml',false);
+  if(present){
+    const doc=parseXml(present);
+    const ids=descendants(doc,'sldId');
+    if(ids.length){
+      const rels=await readRelationships(zip,'ppt/presentation.xml');
+      if(!rels)throw new Error('PowerPoint slide order relationships are missing.');
+      slides=ids.map(slide=>{
+        const id=slide.getAttribute('r:id')||slide.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id')||'';
+        const target=rels.get(id);
+        if(!target || !/^ppt\/slides\/[^/]+\.xml$/.test(target) || !zip.file(target))
+          throw new Error('PowerPoint slide order contains a missing or invalid slide relationship.');
+        return target;
+      });
+      if(new Set(slides).size!==slides.length)throw new Error('PowerPoint contains duplicate slide relationships.');
+    }
+  }
+  if(slides.length>MAX_SECTIONS)throw new Error('Presentation exceeds 80 supported slides.');
   const sections:ImportedSection[]=[];
   for(let i=0;i<slides.length;i++){
     sections.push(pptShapes(parseXml(await readZip(zip,slides[i])),'Slide '+(i+1)));
@@ -170,21 +288,47 @@ async function parsePresentation(zip:JSZip):Promise<ImportedSection[]> {
 }
 function excelValue(cell:Element,shared:string[]):string{
   const type=attr(cell,'t');
-  const raw=textOf(first(cell,'v')||cell);
-  if(type==='s')return shared[Number(raw)]||'';
+  // Missing cached results must not be confused with the formula expression.
+  const value=first(cell,'v');
+  const raw=value?textOf(value):'';
+  const formula=first(cell,'f');
+  if(formula){
+    const expression=(formula.textContent||'').trim();
+    if(!expression)throw new Error('A worksheet contains a shared or incomplete formula whose expression cannot be reconstructed. Open it in a spreadsheet editor and save with explicit formulas.');
+    if(expression.length>2000)throw new Error('Worksheet formula exceeds the supported 2,000-character limit.');
+    return '='+expression+(raw?' [cached result: '+raw+']':' [result not recalculated]');
+  }
+  if(type==='s'){
+    const index=Number(raw);
+    if(!Number.isSafeInteger(index)||index<0||index>=shared.length)
+      throw new Error('A worksheet references a missing or invalid shared string.');
+    return shared[index];
+  }
   if(type==='inlineStr')return descendants(cell,'t').map(textOf).join(' ');
   if(type==='b')return raw==='1'?'TRUE':'FALSE';
-  const formula=first(cell,'f');
-  if(formula)return (raw||'='+(formula.textContent||''))+' [formula]';
   return raw;
 }
 async function parseSpreadsheet(zip:JSZip):Promise<ImportedSection[]>{
   const strings=await readZip(zip,'xl/sharedStrings.xml',false);
   const shared=strings?descendants(parseXml(strings),'si').map(si=>descendants(si,'t').map(textOf).join('')):[];
-  const sheets=filesIn(zip,/^xl\/worksheets\/sheet\d+\.xml$/);
+  let sheets=filesIn(zip,/^xl\/worksheets\/sheet\d+\.xml$/);
   if(!sheets.length)throw new Error('No Excel worksheets were found.');
   const workbook=await readZip(zip,'xl/workbook.xml',false);
-  const names=workbook?descendants(parseXml(workbook),'sheet').map(s=>attr(s,'name')):[];
+  const sheetNodes=workbook?descendants(parseXml(workbook),'sheet'):[];
+  const names=sheetNodes.map(s=>attr(s,'name'));
+  if(sheetNodes.some(s=>s.getAttribute('r:id')||s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id'))){
+    const rels=await readRelationships(zip,'xl/workbook.xml');
+    if(!rels)throw new Error('Excel worksheet order relationships are missing.');
+    sheets=sheetNodes.map(s=>{
+      const id=s.getAttribute('r:id')||s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id')||'';
+      const target=rels.get(id);
+      if(!target || !/^xl\/worksheets\/[^/]+\.xml$/.test(target) || !zip.file(target))
+        throw new Error('Workbook contains a missing or invalid worksheet relationship.');
+      return target;
+    });
+    if(new Set(sheets).size!==sheets.length)throw new Error('Workbook repeats a worksheet relationship.');
+  }
+  if(sheets.length>MAX_SECTIONS)throw new Error('Workbook exceeds 80 supported sheets.');
   const result:ImportedSection[]=[];
   for(let i=0;i<sheets.length;i++){
     const doc=parseXml(await readZip(zip,sheets[i]));
@@ -197,8 +341,8 @@ async function parseSpreadsheet(zip:JSZip):Promise<ImportedSection[]>{
         const ref=attr(cell,'r'),letters=ref.match(/^[A-Z]+/i)?.[0]||'';
         let index=0;for(const letter of letters.toUpperCase())index=index*26+(letter.charCodeAt(0)-64);
         const col=Math.max(0,index-1);
-        if(col>=128)continue;
-        values[col]=excelValue(cell,shared).slice(0,750);
+        if(col>=128)throw new Error('Worksheet exceeds 128 supported columns. Split wide worksheets instead of silently omitting cells.');
+        values[col]=excelValue(cell,shared);
         maxCol=Math.max(maxCol,col+1);
       }
       if(values.length)data.push(values);
@@ -206,15 +350,18 @@ async function parseSpreadsheet(zip:JSZip):Promise<ImportedSection[]>{
     }
     const sheetName=names[i]||'Sheet '+(i+1);
     if(!data.length){result.push({label:sheetName,blocks:[],imageCount:0});continue;}
-    for(let start=0;start<Math.max(1,maxCol);start+=16)for(let offset=0;offset<data.length;offset+=190){
-      const windowRows=data.slice(offset,offset+190).map(row=>Array.from({length:Math.min(16,maxCol-start)},(_,k)=>row[start+k]||''));
-      const maxWidth=windowRows[0]?.length||0;
-      const blocks:SourceBlock[]=[];
-      if(maxWidth>=2&&windowRows.length>=2){
-        push(blocks,paragraph(windowRows.map(row=>row.join('\t')).join('\n'),'table',{
-          description:sheetName+' · rows '+(offset+1)+'–'+(offset+windowRows.length)}));
-      }else for(const row of windowRows)push(blocks,paragraph(row.join(' ')));
-      result.push({label:sheetName+(offset||start?' · range '+(offset+1)+' / col '+(start+1):''),blocks,imageCount:0});
+    for(let start=0;start<Math.max(1,maxCol);start+=16){
+      const width=Math.min(16,maxCol-start);
+      const columnRows=data.map(row=>Array.from({length:width},(_,k)=>row[start+k]||''));
+      for(const chunk of (width>=2&&data.length>=2?chunkTabularRows(columnRows):chunkDelimitedRows(columnRows))){
+        const windowRows=columnRows.slice(chunk.start,chunk.end);
+        const blocks:SourceBlock[]=[];
+        if(width>=2&&data.length>=2){
+          push(blocks,paragraph(chunk.text,'table',{
+            description:sheetName+' · rows '+(chunk.start+1)+'–'+chunk.end}));
+        }else for(const row of windowRows)push(blocks,paragraph(row.join(' ')));
+        result.push({label:sheetName+(chunk.start||start?' · range '+(chunk.start+1)+' / col '+(start+1):''),blocks,imageCount:0});
+      }
     }
   }
   return ensureSections(result);
@@ -234,15 +381,32 @@ function odfBlocks(container:Element,label:string):ImportedSection{
       for(const listItem of elementChildren(element,'list-item'))
         for(const child of elementChildren(listItem))handle(child,true);
     }else if(name==='table'){
-      const rows=elementChildren(element,'table-row').slice(0,200).map(row=>{
+      const sourceRows=elementChildren(element,'table-row');
+      if(sourceRows.length>200)throw new Error('OpenDocument table exceeds 200 supported rows. Split the table instead of omitting rows.');
+      const rows:string[][]=[];
+      for(const row of sourceRows){
         const result:string[]=[];
         for(const cell of elementChildren(row).filter(e=>e.localName==='table-cell'||e.localName==='covered-table-cell')){
-          const times=Math.min(16,Number(attr(cell,'number-columns-repeated')||1)||1);
-          const text=descendants(cell,'p').map(textOf).filter(Boolean).join(' ').slice(0,750);
-          for(let i=0;i<times&&result.length<16;i++)result.push(text);
+          const times=Number(attr(cell,'number-columns-repeated')||1);
+          if(!Number.isInteger(times)||times<1||times>16||result.length+times>16)
+            throw new Error('OpenDocument row exceeds 16 supported columns. Split wide source tables rather than omitting cells.');
+          const colspan=Number(attr(cell,'number-columns-spanned')||1);
+          const rowspan=Number(attr(cell,'number-rows-spanned')||1);
+          if(colspan!==1||rowspan!==1||cell.localName==='covered-table-cell')
+            throw new Error('Merged OpenDocument table cells require source editing before accurate accessible export.');
+          const content=descendants(cell,'p').map(textOf).filter(Boolean).join(' ');
+          for(let i=0;i<times;i++)result.push(content);
         }
-        return result;
-      });
+        const repeated=Number(attr(row,'number-rows-repeated')||1);
+        if(!Number.isSafeInteger(repeated)||repeated<1)
+          throw new Error('Invalid repeated OpenDocument row count.');
+        // ODF authors frequently compress millions of entirely empty formatting rows.
+        // Skip truly blank rows; only material content is represented in reading copies.
+        if(!result.some(value=>value.trim()))continue;
+        if(repeated>200||rows.length+repeated>200)
+          throw new Error('OpenDocument table exceeds 200 content rows after expanding repeated rows.');
+        for(let i=0;i<repeated;i++)rows.push([...result]);
+      }
       if(rows.length>=2&&rows[0].length>=2&&rows.every(r=>r.length===rows[0].length))
         push(blocks,paragraph(rows.map(row=>row.join('\t')).join('\n'),'table',{description:'Table in '+label}));
       else for(const row of rows)push(blocks,paragraph(row.join(' | ')));
@@ -271,20 +435,37 @@ async function parseOdf(zip:JSZip,format:DocumentFormat):Promise<ImportedSection
 }
 function htmlBlocks(body:Element):SourceBlock[]{
   const blocks:SourceBlock[]=[];
+  const ignored=new Set(['script','style','noscript','iframe','svg','nav','head','template']);
+  const visibleText=(node:Node):string=>{
+    const visit=(current:Node):string=>{
+      if(current.nodeType===3)return current.textContent||'';
+      if(current.nodeType!==1)return '';
+      const element=current as Element,tag=element.localName.toLowerCase();
+      if(ignored.has(tag)||element.hasAttribute('hidden')||element.getAttribute('aria-hidden')==='true'||
+        /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)/i.test(element.getAttribute('style')||''))return '';
+      return Array.from(element.childNodes).map(visit).join('');
+    };
+    return visit(node).replace(/\s+/g,' ').trim();
+  };
   const process=(node:Element)=>{
     const name=node.localName.toLowerCase();
-    if(['script','style','noscript','iframe','svg','nav','head','template'].includes(name))return;
+    if(ignored.has(name)||node.hasAttribute('hidden')||node.getAttribute('aria-hidden')==='true')return;
     if(/^h[1-6]$/.test(name)){
-      push(blocks,paragraph(textOf(node),'heading',{headingLevel:Math.min(4,Math.max(2,Number(name[1]))) as 2|3|4}));return;
+      push(blocks,paragraph(visibleText(node),'heading',{headingLevel:Math.min(4,Math.max(2,Number(name[1]))) as 2|3|4}));return;
     }
-    if(name==='p'||name==='blockquote'){push(blocks,paragraph(textOf(node),name==='blockquote'?'blockquote':'paragraph'));return;}
-    if(name==='li'){push(blocks,paragraph(textOf(node),'list'));return;}
+    if(name==='p'||name==='blockquote'){push(blocks,paragraph(visibleText(node),name==='blockquote'?'blockquote':'paragraph'));return;}
+    if(name==='li'){push(blocks,paragraph(visibleText(node),'list'));return;}
     if(name==='table'){
-      const rows=descendants(node,'tr').slice(0,200).map(row=>
-        elementChildren(row).filter(e=>e.localName==='td'||e.localName==='th').map(textOf).slice(0,16));
+      if(descendants(node,'td').concat(descendants(node,'th')).some(cell=>Number(cell.getAttribute('colspan')||1)!==1||Number(cell.getAttribute('rowspan')||1)!==1))
+        throw new Error('Merged HTML table cells require source editing before accurate accessible export.');
+      const sourceRows=descendants(node,'tr');
+      if(sourceRows.length>200)throw new Error('HTML table exceeds 200 supported rows. Split the table instead of omitting rows.');
+      const rows=sourceRows.map(row=>
+        elementChildren(row).filter(e=>e.localName==='td'||e.localName==='th').map(visibleText));
+      if(rows.some(r=>r.length>16))throw new Error('HTML table exceeds 16 supported columns. Split the table instead of omitting cells.');
       if(rows.length>=2&&rows[0].length>=2&&rows.every(r=>r.length===rows[0].length))
         push(blocks,paragraph(rows.map(row=>row.join('\t')).join('\n'),'table',{
-          description:textOf(first(node,'caption')||node).slice(0,150)}));
+          description:visibleText(first(node,'caption')||node).slice(0,150)}));
       else for(const row of rows)push(blocks,paragraph(row.join(' | ')));
       return;
     }
@@ -299,19 +480,53 @@ export function parseHtmlContent(html:string):SourceBlock[]{
   return htmlBlocks(container);
 }
 async function parseEpub(zip:JSZip):Promise<ImportedSection[]>{
-  const chapters=Object.keys(zip.files).filter(p=>/\.(xhtml|html|htm)$/i.test(p)&&
+  let chapters=Object.keys(zip.files).filter(p=>/\.(xhtml|html|htm)$/i.test(p)&&
     !/(nav|toc|cover)\.(xhtml|html|htm)$/i.test(p)).sort();
+  const container=await readZip(zip,'META-INF/container.xml',false);
+  if(container){
+    const root=first(parseXml(container),'rootfile');
+    const rawPath=attr(root,'full-path');
+    const opfPath=rawPath?archiveTarget('','/'+rawPath):'';
+    if(!opfPath || !zip.file(opfPath))throw new Error('EPUB package document is missing.');
+    const packageDoc=parseXml(await readZip(zip,opfPath));
+    const manifest=first(packageDoc,'manifest'),spine=first(packageDoc,'spine');
+    if(!manifest||!spine)throw new Error('EPUB manifest or reading spine is missing.');
+    const entries=new Map<string,string>();
+    for(const item of elementChildren(manifest,'item')){
+      const id=attr(item,'id'),href=attr(item,'href');
+      const media=attr(item,'media-type');
+      if(!id||!href)throw new Error('EPUB manifest includes an incomplete content item.');
+      if(media==='application/xhtml+xml'||media==='text/html'){
+        const target=archiveTarget(opfPath,href);
+        if(!zip.file(target))throw new Error('EPUB spine chapter is missing: '+href);
+        entries.set(id,target);
+      }
+    }
+    chapters=elementChildren(spine,'itemref').map(item=>{
+      const id=attr(item,'idref');
+      if(!id||!entries.has(id))throw new Error('EPUB spine references an unavailable readable chapter.');
+      return entries.get(id)!;
+    });
+    if(new Set(chapters).size!==chapters.length)throw new Error('EPUB spine repeats a chapter unexpectedly.');
+  }
   if(!chapters.length)throw new Error('No readable EPUB chapters found. This may be a DRM-protected book.');
+  if(chapters.length>MAX_SECTIONS)throw new Error('EPUB exceeds 80 supported spine chapters.');
   const results:ImportedSection[]=[];
   for(let i=0;i<chapters.length;i++){
-    const blocks=parseHtmlContent(await readZip(zip,chapters[i]));
+    const html=await readZip(zip,chapters[i]);
+    const blocks=parseHtmlContent(html);
     results.push(...partition('Chapter '+(i+1),blocks));
   }
   return ensureSections(results);
 }
 export async function importOfficeDocument(file:File,format:DocumentFormat):Promise<ImportedSection[]>{
   const zip=await loadOfficeZip(file);
-  if(format==='docx')return parseWord(parseXml(await readZip(zip,'word/document.xml')));
+  if(format==='docx'){
+    const [footnotes,endnotes]=await Promise.all([
+      wordNoteReferences(zip,'footnote'),wordNoteReferences(zip,'endnote'),
+    ]);
+    return parseWord(parseXml(await readZip(zip,'word/document.xml')),footnotes,endnotes);
+  }
   if(format==='pptx')return parsePresentation(zip);
   if(format==='xlsx')return parseSpreadsheet(zip);
   if(format==='odt'||format==='odp'||format==='ods')return parseOdf(zip,format);
