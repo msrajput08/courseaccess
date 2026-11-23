@@ -1,0 +1,33 @@
+name: Provision CourseAccess D1 schema (production database, accounts OFF)
+
+on:
+  push:
+    branches: [infra/d1-production-schema-only]
+    paths:
+      - ".github/workflows/d1-production-schema.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: courseaccess-d1-production-schema
+  cancel-in-progress: false
+
+jobs:
+  schema-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_WRITE_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      COURSEACCESS_PRODUCTION_SCHEMA_ONLY: "confirmed"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install application dependencies
+        run: npm install --no-audit --no-fund
+      - name: Provision D1 schema, check table integrity and backup status (no Worker deploy)
+        run: python3 scripts/d1_production_schema_only.py
