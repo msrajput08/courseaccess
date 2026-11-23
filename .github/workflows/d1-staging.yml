@@ -1,0 +1,33 @@
+name: Provision and verify CourseAccess staging D1 (never production)
+
+on:
+  push:
+    branches: [infra/d1-inspection]
+    paths:
+      - ".github/workflows/d1-staging.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: courseaccess-d1-staging-provision
+  cancel-in-progress: false
+
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: "true"
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_WRITE_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned project dependencies and Wrangler
+        run: npm ci --no-audit --no-fund
+      - name: Create/inspect and migrate dedicated staging D1 only
+        run: python3 scripts/d1_staging_provision.py
