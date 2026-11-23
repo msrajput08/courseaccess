@@ -32,6 +32,17 @@ jobs:
           python3 scripts/generate_real_corpus.py
       - name: Test source-to-export integrity of authored academic documents
         run: npm run test:corpus
+      - name: Fetch independently authored CC0 document corpus (immutable verified blobs)
+        run: python3 scripts/fetch_external_corpus.py
+      - name: Test external DOCX/PPTX/XLSX and scanned/encrypted/corrupt PDFs
+        run: npm run test:external-corpus
+      - name: Upload external-source QA manifest and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-external-cc0-corpus
+          path: quality/external/manifest.json
+          if-no-files-found: ignore
       - name: Upload generated corpus manifest and source-only QA inputs
         if: always()
         uses: actions/upload-artifact@v4
