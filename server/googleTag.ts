@@ -1,4 +1,4 @@
-import {GTM_CONTAINER,CONSENT_KEY} from '../src/lib/analyticsPolicy';
+import {GA4_MEASUREMENT_ID,CONSENT_KEY} from '../src/lib/analyticsPolicy';
 // Direct, server-rendered Google installation. Default consent runs before the async tag.
 export function googleTagHead(nonce:string){
  return `<script nonce="${nonce}">
@@ -11,12 +11,12 @@ try {
     gtag('consent','update',{analytics_storage:'granted',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
   }
 } catch (_) {}
-window.dataLayer.push({'gtm.start':Date.now(),event:'gtm.js'});
 </script>
-<script async src="https://www.googletagmanager.com/gtm.js?id=${GTM_CONTAINER}" id="courseaccess-gtm"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=${GA4_MEASUREMENT_ID}" id="courseaccess-ga4"></script>
 <script nonce="${nonce}">
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
+  gtag('config', '${GA4_MEASUREMENT_ID}', {allow_google_signals:false,allow_ad_personalization_signals:false,page_location:location.origin+location.pathname+location.search,page_referrer:document.referrer ? new URL(document.referrer).origin : ''});
 </script>`;
 }

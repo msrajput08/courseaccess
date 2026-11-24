@@ -1,4 +1,4 @@
-import {canLoadAnalytics,CONSENT_KEY,readConsent,type AnalyticsConsent} from './analyticsPolicy';
+import {canLoadAnalytics,CONSENT_KEY,GA4_MEASUREMENT_ID,readConsent,type AnalyticsConsent} from './analyticsPolicy';
 type AnalyticsWindow=Window&{dataLayer?:unknown[]};
 const w=()=>window as AnalyticsWindow;
 export function getAnalyticsConsent():AnalyticsConsent{
@@ -7,7 +7,7 @@ export function getAnalyticsConsent():AnalyticsConsent{
 export function saveAnalyticsConsent(choice:Exclude<AnalyticsConsent,null>){
  try{localStorage.setItem(CONSENT_KEY,JSON.stringify({choice,at:Date.now()}));return true;}catch{return false;}
 }
-export function analyticsLoaded(){return !!document.getElementById('courseaccess-gtm');}
+export function analyticsLoaded(){return !!document.getElementById('courseaccess-ga4');}
 let lastChoice:AnalyticsConsent=null;
 function updateConsent(analytics:'granted'|'denied'){
  if(!analyticsLoaded()||!canLoadAnalytics(new URL(location.href))||lastChoice===analytics)return;
@@ -20,5 +20,8 @@ export function startAnalytics(){if(getAnalyticsConsent()==='granted')updateCons
 export function stopAnalytics(){updateConsent('denied');}
 export function trackMarketingAction(action:'free_checker_selected'|'plan_selected',tier?:'pro'|'institution'){
  if(!canLoadAnalytics(new URL(location.href))||getAnalyticsConsent()!=='granted'||!analyticsLoaded())return;
- w().dataLayer?.push({event:'courseaccess_'+action,...(action==='plan_selected'&&tier?{plan:tier}:{})});
+ const data=w().dataLayer;
+ if(!data)return;
+ function gtag(..._args:unknown[]){data!.push(arguments);}
+ gtag('event','courseaccess_'+action,{send_to:GA4_MEASUREMENT_ID,...(action==='plan_selected'&&tier?{plan:tier}:{})});
 }

@@ -1,5 +1,5 @@
 export const ANALYTICS_ORIGIN='https://courseaccess.minty-12-shar.workers.dev';
-export const GTM_CONTAINER='GTM-TDLVR6PD';
+export const GA4_MEASUREMENT_ID='G-CL85EKEFRL';
 const publicPaths=new Set(['/','/pricing','/guides','/guides/pdf-accessibility-checker','/guides/accessible-lecture-notes','/guides/fix-inaccessible-pdfs','/guides/math-accessibility','/guides/academic-documents']);
 export function isMarketingPath(path:string){return publicPaths.has(path);}
 const campaignKeys=new Set(['utm_source','utm_medium','utm_campaign','utm_content','utm_term','utm_id','gtm_debug']);
