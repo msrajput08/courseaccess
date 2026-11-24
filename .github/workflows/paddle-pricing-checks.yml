@@ -17,3 +17,13 @@ jobs:
           node-version: "22"
       - run: npm install --no-audit --no-fund
       - run: npm run check
+      - name: Verify live webhook secret is configured (no network or disclosure)
+        env:
+          PADDLE_LIVE_WEBHOOK_SECRET: ${{ secrets.PADDLE_LIVE_WEBHOOK_SECRET }}
+        shell: bash
+        run: |
+          if [[ -z "$PADDLE_LIVE_WEBHOOK_SECRET" ]]; then
+            echo "::error::Missing repository secret PADDLE_LIVE_WEBHOOK_SECRET."
+            exit 1
+          fi
+          echo "Webhook secret is configured; value not displayed. Authenticity requires a signed Paddle notification." >> "$GITHUB_STEP_SUMMARY"

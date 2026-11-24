@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      sync_paddle_webhook_secret:
+        description: 'Securely bind the existing Paddle live signing secret (does not enable payments)'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -14,6 +20,8 @@ concurrency:
 
 jobs:
   deploy:
+    # Manual dispatches from development branches must never publish production.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -112,6 +120,23 @@ jobs:
           COURSEACCESS_ACTIVATE_PRODUCTION: authorized-workers-dev
         run: node scripts/prepare-production-accounts.mjs
 
+      - name: Prepare optional Paddle Worker secret without printing it
+        id: paddle_secret
+        if: steps.credentials.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && inputs.sync_paddle_webhook_secret
+        shell: bash
+        env:
+          PADDLE_LIVE_WEBHOOK_SECRET: ${{ secrets.PADDLE_LIVE_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$PADDLE_LIVE_WEBHOOK_SECRET" ]]; then
+            echo "::error::PADDLE_LIVE_WEBHOOK_SECRET is missing."
+            exit 1
+          fi
+          umask 077
+          node -e 'const fs=require("node:fs"); fs.writeFileSync(process.env.RUNNER_TEMP+"/courseaccess-paddle-secrets.json",JSON.stringify({PADDLE_LIVE_WEBHOOK_SECRET:process.env.PADDLE_LIVE_WEBHOOK_SECRET}),{mode:0o600})'
+          echo "args=--secrets-file $RUNNER_TEMP/courseaccess-paddle-secrets.json" >> "$GITHUB_OUTPUT"
+          echo "Paddle signing secret prepared for the authorized Worker release (billing remains disabled)." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Publish Worker and static assets
         if: steps.credentials.outputs.ready == 'true'
         id: publish
@@ -119,7 +144,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config .wrangler-courseaccess-active.jsonc
+          command: deploy --config .wrangler-courseaccess-active.jsonc ${{ steps.paddle_secret.outputs.args }}
 
       - name: Verify deployed HTML, assets, API and sitemap
         if: steps.credentials.outputs.ready == 'true'
@@ -174,4 +199,4 @@ jobs:
 
       - name: Delete the ephemeral D1 binding config from the runner
         if: always()
-        run: rm -f .wrangler-courseaccess-active.jsonc
+        run: rm -f .wrangler-courseaccess-active.jsonc "$RUNNER_TEMP/courseaccess-paddle-secrets.json"
