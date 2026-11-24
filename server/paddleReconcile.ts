@@ -41,6 +41,10 @@ export async function reconcilePaddleEvent(env:BillingEnv,event:VerifiedPaddleEv
       // An initial event can arrive before the intent write; do not permanently
       // acknowledge unresolved CourseAccess transactions.
       const tx=await paddleData(env,'/transactions/'+event.data.id);
+      if(providerId(tx.subscription_id,'sub')){
+        const linked=await db.prepare("SELECT id FROM subscriptions WHERE provider='paddle' AND provider_subscription_ref=?").bind(tx.subscription_id).first();
+        if(linked){await receipt(db,event);return true;}
+      }
       if(obj(tx.custom_data)?.courseaccess_intent)throw Error('Unresolved checkout intent');
       await receipt(db,event);return true;
     }
@@ -62,7 +66,7 @@ export async function reconcilePaddleEvent(env:BillingEnv,event:VerifiedPaddleEv
     }else subId=adjustment.subscription_id;
     if(!providerId(subId,'sub')){await receipt(db,event);return true;}
     // Conservative hold for approved refunds/chargebacks; no automatic reinstatement.
-    if(adjustment.status==='approved'||adjustment.action==='chargeback'||adjustment.action==='chargeback_warning'){
+    if((adjustment.status==='approved'&&adjustment.action==='refund')||adjustment.action==='chargeback'||adjustment.action==='chargeback_warning'){
       await db.batch([
         db.prepare("INSERT INTO paddle_subscription_holds(subscription_id,reason,created_at_ms) VALUES(?,'adjustment',?) ON CONFLICT(subscription_id) DO NOTHING").bind(subId,Date.now()),
         db.prepare("UPDATE subscriptions SET status='past_due' WHERE provider='paddle' AND provider_subscription_ref=? AND status IN ('active','trialing')").bind(subId),

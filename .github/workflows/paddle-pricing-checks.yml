@@ -17,6 +17,8 @@ jobs:
           node-version: "22"
       - run: npm install --no-audit --no-fund
       - run: npm run check
+      - name: Verify billing database schema and ownership constraints
+        run: python3 scripts/test_billing_schema.py
       - name: Verify live webhook secret is configured (no network or disclosure)
         env:
           PADDLE_LIVE_WEBHOOK_SECRET: ${{ secrets.PADDLE_LIVE_WEBHOOK_SECRET }}

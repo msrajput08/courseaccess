@@ -12,7 +12,7 @@ export interface LiveCheckoutEnv extends AccountEnv,BillingEnv {
 export const validTier=(v:unknown):v is CheckoutTier=>v==='pro'||v==='institution';
 export const transactionId=(v:unknown):v is string=>typeof v==='string'&&/^txn_[a-z0-9]{26}$/.test(v);
 export function checkoutEnabled(req:Request,env:LiveCheckoutEnv):boolean{
-  return env.COURSEACCESS_LIVE_CHECKOUT_ENABLED==='true'&&env.COURSEACCESS_PADDLE_RECONCILE_ENABLED==='true'&&inboxEnabled(req,env)&&activeAccountService(req,env)&&!!env.PADDLE_LIVE_API_KEY?.startsWith('pdl_live_apikey_')&&!!env.PADDLE_LIVE_CLIENT_TOKEN?.startsWith('live_');
+  return env.COURSEACCESS_LIVE_CHECKOUT_ENABLED==='true'&&env.COURSEACCESS_PAID_FEATURES_ENABLED==='true'&&env.COURSEACCESS_PADDLE_RECONCILE_ENABLED==='true'&&inboxEnabled(req,env)&&activeAccountService(req,env)&&!!env.PADDLE_LIVE_API_KEY?.startsWith('pdl_live_apikey_')&&!!env.PADDLE_LIVE_CLIENT_TOKEN?.startsWith('live_');
 }
 export function checkoutConfig(req:Request,env:LiveCheckoutEnv):Response{
   const enabled=checkoutEnabled(req,env);
