@@ -6,6 +6,7 @@ import {sha256} from '../server/accountSecurity';
 import {handleLiveWebhook,retryPaddleInbox,type BillingEnv} from '../server/billingApi';
 import {handleEntitlements} from '../server/paidAccess';
 import {handleScopeChange} from '../server/billingScope';
+import {handleBillingPortal} from '../server/billingPortal';
 import {PRICE_IDS} from '../server/liveCheckout';
 import {createHmac} from 'node:crypto';
 const origin='https://courseaccess.minty-12-shar.workers.dev',secret='fixture-not-real';
@@ -40,12 +41,14 @@ describe('signed Paddle lifecycle against migrated SQLite',()=>{
    const period={starts_at:new Date(now-1000).toISOString(),ends_at:new Date(now+86400000).toISOString()};
    const pro={quantity:1,price:{id:PRICE_IDS.pro,product_id:'pro_01m87ccf14cemskhymbze0w9gd'}};
    const institution={quantity:1,price:{id:PRICE_IDS.institution,product_id:'pro_01m87cg6jmsj8ptqynxa1rf10h'}};
-   let canonical:Record<string,unknown>={id:sub,customer_id:customer,status:'active',updated_at:new Date(now).toISOString(),current_billing_period:period,items:[pro],custom_data:{courseaccess_intent:intent}};
+   let canonical:Record<string,unknown>={id:sub,customer_id:customer,status:'active',email:'buyer@example.invalid',updated_at:new Date(now).toISOString(),current_billing_period:period,items:[pro],custom_data:{courseaccess_intent:intent}};
    let unavailable=false;
+   let emailCode='';
+   env.COURSEACCESS_PORTAL_PROOF_SECRET='fixture-secret-longer-than-thirty-two-characters';env.COURSEACCESS_BILLING_FROM_EMAIL='billing@example.invalid';env.BILLING_EMAIL={async send(message){expect(message.to).toBe('buyer@example.invalid');emailCode=message.text.match(/[0-9a-f]{20}/)?.[0]||'';}};
    const fetchMock=vi.fn(async(input:unknown)=>{
     const path=new URL(String(input)).pathname;
     if(unavailable)return new Response(null,{status:503});
-    const data=path==='/subscriptions/'+sub?canonical:path==='/transactions/'+tx?{id:tx,status:'completed',subscription_id:sub,customer_id:customer,items:[pro],custom_data:{courseaccess_intent:intent}}:path==='/customers/'+customer?{id:customer,status:'active',updated_at:new Date(now).toISOString()}:path==='/adjustments/'+adj?{id:adj,subscription_id:sub,status:'approved',action:'refund'}:null;
+    const data=path==='/subscriptions/'+sub?canonical:path==='/transactions/'+tx?{id:tx,status:'completed',subscription_id:sub,customer_id:customer,items:[pro],custom_data:{courseaccess_intent:intent}}:path==='/customers/'+customer?{id:customer,status:'active',updated_at:new Date(now).toISOString()}:path==='/customers/'+customer+'/portal-sessions'?{customer_id:customer,urls:{subscriptions:[{id:sub,view_subscription:'https://customer-portal.paddle.com/cpl_'+'e'.repeat(26)+'?action=view_subscription&subscription_id='+sub+'&token=pga_fixture'}]}}:path==='/adjustments/'+adj?{id:adj,subscription_id:sub,status:'approved',action:'refund'}:null;
     return data?Response.json({data}):new Response(null,{status:404});
    });
    vi.stubGlobal('fetch',fetchMock);
@@ -68,6 +71,12 @@ describe('signed Paddle lifecycle against migrated SQLite',()=>{
    expect(mirror()?.price_id).toBe(PRICE_IDS.pro);expect(mirror()?.product_id).toBe(pro.price.product_id);
    expect(await access()).toBe(true);expect(await access(otherToken)).toBe(false);
    await retryPaddleInbox(env);expect(applied(early)).not.toBeNull();
+   const portal=(body:Record<string,unknown>,extra='',session=token)=>handleBillingPortal(new Request(origin+'/api/billing/portal',{method:'POST',headers:{origin,'content-type':'application/json',cookie:'__Host-courseaccess='+session+extra},body:JSON.stringify(body)}),env);
+   const start=await portal({action:'verify'});expect(start.status).toBe(200);expect(emailCode.length).toBe(20);const proof='; '+start.headers.get('set-cookie')!.split(';')[0];
+   expect((await portal({action:'open',code:'0'.repeat(20)},proof)).status).toBe(403);
+   expect((await portal({action:'open',code:emailCode},proof,otherToken)).status).toBe(404);
+   const opened=await portal({action:'open',code:emailCode},proof);expect(opened.status).toBe(200);expect((await opened.json()).authenticatedPortal).toBe(true);
+   expect((await portal({action:'open',code:emailCode},proof)).status).toBe(409);
    const before=fetchMock.mock.calls.length;await event('transaction.completed',tx,initial);expect(fetchMock.mock.calls.length).toBe(before);
    await event('customer.created',customer);expect(sqlite.prepare('SELECT status FROM paddle_customers WHERE customer_id=?').get(customer)?.status).toBe('active');
    update('active',{scheduled_change:{action:'cancel',effective_at:period.ends_at}});await event('subscription.updated',sub);
