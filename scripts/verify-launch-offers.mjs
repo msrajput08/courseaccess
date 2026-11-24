@@ -10,6 +10,7 @@ if(Date.now()<Date.parse('2026-12-27T00:00:00Z')){
   if(!Array.isArray(list)||list.length!==1)throw Error(tier+' discount missing or ambiguous');
   const d=list[0],expires=Date.parse(d.expires_at);
   if(expires<=Date.now()&&expires>=Date.parse('2026-12-24T00:00:00Z'))continue;
+  console.log(tier+' settings: '+JSON.stringify({status:d.status,type:d.type,percentage:d.amount,recur:d.recur,billingPeriods:d.maximum_recurring_intervals,usageLimit:d.usage_limit,checkoutEnabled:d.enabled_for_checkout,restrictedToExpected:Array.isArray(d.restrict_to)&&d.restrict_to.length===1&&[price,product].includes(d.restrict_to[0]),restrictionCount:Array.isArray(d.restrict_to)?d.restrict_to.length:0,expiresAt:d.expires_at,codeMatches:String(d.code).toUpperCase()===code}));
   if(!/^dsc_[a-z0-9]{26}$/.test(d.id)||d.status!=='active'||String(d.code).toUpperCase()!==code||d.type!=='percentage'||Number(d.amount)!==percent||d.recur!==true||d.maximum_recurring_intervals!==12||d.usage_limit!==null||d.enabled_for_checkout!==true||!Array.isArray(d.restrict_to)||d.restrict_to.length!==1||![price,product].includes(d.restrict_to[0])||!Number.isFinite(expires)||expires<Date.parse('2026-12-24T00:00:00Z')||expires>Date.parse('2026-12-27T00:00:00Z'))throw Error(tier+' discount settings mismatch (percentage, recurring periods, restriction, expiry or redemption limit)');
   const preview=await call('/transactions/preview',{items:[{price_id:price,quantity:1}],discount_id:d.id,currency_code:'USD'});
   const totals=preview.details?.totals;
