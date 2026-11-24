@@ -1,0 +1,25 @@
+name: Paddle production configuration audit (read only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/paddle-production-audit.mjs'
+      - '.github/workflows/paddle-production-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify actual live Paddle configuration without payments
+        env:
+          PADDLE_LIVE_API_KEY: ${{ secrets.PADDLE_LIVE_API_KEY }}
+          PADDLE_LIVE_CLIENT_TOKEN: ${{ secrets.PADDLE_LIVE_CLIENT_TOKEN }}
+          PADDLE_LIVE_WEBHOOK_SECRET: ${{ secrets.PADDLE_LIVE_WEBHOOK_SECRET }}
+        run: node scripts/paddle-production-audit.mjs
