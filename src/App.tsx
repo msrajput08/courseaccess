@@ -11,11 +11,12 @@ import Workspace from './components/Workspace';
 import AccountPage from './components/AccountPage';
 import PaidReviewHistory from './components/PaidReviewHistory';
 import BatchReview from './components/BatchReview';
+import AdminAnalytics from './components/AdminAnalytics';
 import AnalyticsPreferences from './components/AnalyticsPreferences';
 import {isMarketingPath} from './lib/analyticsPolicy';
 import {trackMarketingAction} from './lib/analytics';
 
-type PageName='home'|'checker'|'pricing'|'dashboard'|'resources'|'privacy'|'terms'|'refunds'|'account';
+type PageName='home'|'checker'|'pricing'|'dashboard'|'resources'|'privacy'|'terms'|'refunds'|'account'|'admin';
 type Route={page:PageName;slug?:string};
 const guides=[
   {slug:'pdf-accessibility-checker',category:'DOCUMENT REVIEW',title:'How to check a PDF for accessibility',description:'Automated checks are an informed beginning, not a conformance verdict.',sections:[['Start with measurable evidence','Check whether text is extractable from every page, and compare that extracted content with what is visually present. An empty text layer is worth investigating, but it does not by itself prove that the page is scanned.'],['Inspect what software cannot decide','Reading order, appropriate figure descriptions, navigable tables, heading hierarchy and accessible mathematics require specialist tools and human judgement.'],['Validate your corrected document','Repair the source document when possible, generate the new format and evaluate it with accessibility tools and assistive technology.']]},
@@ -24,11 +25,12 @@ const guides=[
   {slug:'math-accessibility',category:'STEM EDUCATION',title:'How to make mathematics accessible to students',description:'Accessible equations require preserving meaning, not just appearance.',sections:[['Respect the original notation','Text extraction can lose superscripts, fractions, matrices and spatial relationships. Never assume recovered symbols are complete.'],['Provide semantic alternatives','Where supported, use human-reviewed MathML or an appropriate accessible equation representation.'],['Use subject-matter review','Ask someone familiar with the subject to validate each transcription and description.']]},
   {slug:'academic-documents',category:'INCLUSIVE WORKFLOWS',title:'A repeatable academic document accessibility workflow',description:'Make inclusion part of writing, revising and distributing course material.',sections:[['Design from the beginning','Plan clear structure, meaningful links, accessible tables and descriptive visual material while drafting.'],['Review before publication','Inspect the final format for text extraction, navigation, structure and visual-content alternatives.'],['Keep a feedback channel','Give students an easy way to report a barrier and obtain a usable alternative.']]},
 ];
-const names:Record<PageName,string>={home:'Every lesson. Accessible to everyone.',checker:'Free multi-format document accessibility checker',pricing:'Pricing and access',dashboard:'Local workspace',resources:'Accessible teaching resources',privacy:'Privacy policy',terms:'Terms of service',refunds:'Refund and cancellation policy',account:'Secure account and institution access'};
+const names:Record<PageName,string>={home:'Every lesson. Accessible to everyone.',checker:'Free multi-format document accessibility checker',pricing:'Pricing and access',dashboard:'Local workspace',resources:'Accessible teaching resources',privacy:'Privacy policy',terms:'Terms of service',refunds:'Refund and cancellation policy',account:'Secure account and institution access',admin:'Private traffic analytics'};
 function readRoute():Route {
   const path=location.pathname.replace(/\/$/,'')||'/';
   if(path.startsWith('/guides/'))return {page:'resources',slug:path.split('/')[2]};
   if(path==='/checker')return {page:'checker'};
+  if(path==='/admin/analytics')return {page:'admin'};
   if(path==='/account')return {page:'account'};
   if(path==='/pricing')return {page:'pricing'};
   if(path==='/workspace')return {page:'dashboard'};
@@ -157,6 +159,7 @@ export default function App(){
     {route.page==='checker'&&(inspection&&file?<Workspace inspection={inspection} file={file} onNew={newCheck} onSaved={()=>setHistory(loadHistory())}/>:<Checker onDone={done}/>)}
     {route.page==='pricing'&&<Pricing go={go}/>}
     {route.page==='account'&&<AccountPage/>}
+    {route.page==='admin'&&<AdminAnalytics/>}
     {route.page==='dashboard'&&<Dashboard go={go} history={history} onClear={()=>{clearHistory();setHistory([]);}}/>}
     {route.page==='resources'&&<Resources go={go} slug={route.slug}/>}
     {route.page==='privacy'&&<Legal kind="privacy"/>}

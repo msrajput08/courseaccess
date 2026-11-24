@@ -1,4 +1,5 @@
 import {canLoadAnalytics,ANALYTICS_ORIGIN} from '../src/lib/analyticsPolicy';
+import {handleAdminAnalytics,type AdminAnalyticsEnv} from './adminAnalytics';
 import {googleTagHead} from './googleTag';
 import {recordNavigation,type TrafficDataset} from './trafficAnalytics';
 import {publicOffers} from './launchOffers';
@@ -12,10 +13,10 @@ import type {AccountEnv} from './accountSecurity';
 import {parsePlans} from './entitlements';
 import {handleEntitlements,handlePaidReviewHistory} from './paidAccess';
 import {checkoutConfig,createCheckoutIntent,checkoutEnabled} from './liveCheckout';
-type Env=AccountEnv & BillingEnv & {COURSEACCESS_LIVE_CHECKOUT_ENABLED?:string;COURSEACCESS_LIVE_PRICE_PREVIEW_ENABLED?:string;COURSEACCESS_LAUNCH_OFFERS?:string; TRAFFIC_ANALYTICS?:TrafficDataset} & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; PADDLE_LIVE_CLIENT_TOKEN?:string; };
+type Env=AdminAnalyticsEnv & AccountEnv & BillingEnv & {COURSEACCESS_LIVE_CHECKOUT_ENABLED?:string;COURSEACCESS_LIVE_PRICE_PREVIEW_ENABLED?:string;COURSEACCESS_LAUNCH_OFFERS?:string; TRAFFIC_ANALYTICS?:TrafficDataset} & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; PADDLE_LIVE_CLIENT_TOKEN?:string; };
 const jsonHeaders={'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'};
 const knownPaths=['/','/checker','/pricing','/guides','/guides/pdf-accessibility-checker','/guides/accessible-lecture-notes','/guides/fix-inaccessible-pdfs','/guides/math-accessibility','/guides/academic-documents','/privacy','/terms','/refunds'];
-const navigationPaths=new Set(['/','/checker','/workspace','/account','/pricing','/guides','/privacy','/terms','/refunds']);
+const navigationPaths=new Set(['/admin/analytics','/','/checker','/workspace','/account','/pricing','/guides','/privacy','/terms','/refunds']);
 function isAppNavigation(pathname:string):boolean {
   return navigationPaths.has(pathname)||pathname.startsWith('/guides/');
 }
@@ -72,6 +73,7 @@ export default {
     if(url.pathname==='/api/billing/review-history'&&['GET','POST','DELETE'].includes(request.method))return secure(await handlePaidReviewHistory(request,env));
     if(url.pathname==='/api/billing/checkout-config'&&request.method==='GET')return secure(checkoutConfig(request,env));
     if(url.pathname==='/api/billing/checkout-intent'&&request.method==='POST')return secure(await createCheckoutIntent(request,env));
+    if(url.pathname==='/api/admin/analytics')return secure(await handleAdminAnalytics(request,env));
     if(url.pathname.startsWith('/api/'))return reply({error:'Not available. Authentication and billing are not configured.'},request.method==='GET'?404:403);
     if(request.method==='GET'&&url.pathname==='/sitemap.xml')return secure(new Response(sitemap(url.origin),{headers:{'content-type':'application/xml; charset=utf-8','cache-control':'public, max-age=3600'}}));
     if(request.method==='GET'&&url.pathname==='/robots.txt')return secure(new Response('User-agent: *\nAllow: /\nSitemap: '+url.origin+'/sitemap.xml\n',{headers:{'content-type':'text/plain; charset=utf-8','cache-control':'public, max-age=3600'}}));
@@ -88,6 +90,7 @@ export default {
       const headers=new Headers(shell.headers);
       headers.set('cache-control','no-store, no-cache, must-revalidate');
       headers.set('pragma','no-cache');
+      if(url.pathname==='/admin/analytics')headers.set('x-robots-tag','noindex, nofollow');
       headers.set('x-content-type-options','nosniff');
       const marketing=canLoadAnalytics(url);
       if(request.method==='GET'&&marketing&&shell.ok&&headers.get('content-type')?.includes('text/html')){

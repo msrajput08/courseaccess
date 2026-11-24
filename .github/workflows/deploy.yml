@@ -132,12 +132,15 @@ jobs:
           PADDLE_LIVE_CLIENT_TOKEN: ${{ secrets.PADDLE_LIVE_CLIENT_TOKEN }}
         run: node scripts/prepare-production-accounts.mjs
 
-      - name: Bind Paddle signing and API secrets securely
+      - name: Bind Paddle signing, API and optional administrator analytics secrets securely
         if: steps.credentials.outputs.ready == 'true'
         shell: bash
         env:
           PADDLE_LIVE_WEBHOOK_SECRET: ${{ secrets.PADDLE_LIVE_WEBHOOK_SECRET }}
           PADDLE_LIVE_API_KEY: ${{ secrets.PADDLE_LIVE_API_KEY }}
+          COURSEACCESS_ADMIN_ACCOUNT_ID: ${{ secrets.COURSEACCESS_ADMIN_ACCOUNT_ID }}
+          COURSEACCESS_ANALYTICS_READ_TOKEN: ${{ secrets.COURSEACCESS_ANALYTICS_READ_TOKEN }}
+          COURSEACCESS_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
           if [[ -z "$PADDLE_LIVE_WEBHOOK_SECRET" || -z "$PADDLE_LIVE_API_KEY" ]]; then
@@ -145,7 +148,7 @@ jobs:
             exit 1
           fi
           umask 077
-          node -e 'require("node:fs").writeFileSync(process.env.RUNNER_TEMP+"/courseaccess-paddle-secrets.json",JSON.stringify({PADDLE_LIVE_WEBHOOK_SECRET:process.env.PADDLE_LIVE_WEBHOOK_SECRET,PADDLE_LIVE_API_KEY:process.env.PADDLE_LIVE_API_KEY}),{mode:0o600})'
+          node -e 'const e=process.env;const s={PADDLE_LIVE_WEBHOOK_SECRET:e.PADDLE_LIVE_WEBHOOK_SECRET,PADDLE_LIVE_API_KEY:e.PADDLE_LIVE_API_KEY};if(e.COURSEACCESS_ADMIN_ACCOUNT_ID&&e.COURSEACCESS_ANALYTICS_READ_TOKEN){if(!/^[a-f0-9-]{36}$/i.test(e.COURSEACCESS_ADMIN_ACCOUNT_ID)||!(/^[a-f0-9]{32}$/i.test(e.COURSEACCESS_CF_ACCOUNT_ID)))throw Error("Invalid admin configuration");Object.assign(s,{COURSEACCESS_ADMIN_ACCOUNT_ID:e.COURSEACCESS_ADMIN_ACCOUNT_ID,COURSEACCESS_ANALYTICS_READ_TOKEN:e.COURSEACCESS_ANALYTICS_READ_TOKEN,COURSEACCESS_CF_ACCOUNT_ID:e.COURSEACCESS_CF_ACCOUNT_ID});}else{console.log("Admin analytics remains unconfigured.");}require("node:fs").writeFileSync(e.RUNNER_TEMP+"/courseaccess-paddle-secrets.json",JSON.stringify(s),{mode:0o600})'
 
       - name: Publish Worker and static assets
         if: steps.credentials.outputs.ready == 'true'
@@ -212,6 +215,12 @@ jobs:
         env:
           COURSEACCESS_URL: ${{ steps.publish.outputs.deployment-url }}
         run: node scripts/verify-analytics-live.mjs
+
+      - name: Verify private analytics route and anonymous API rejection
+        if: steps.credentials.outputs.ready == 'true'
+        env:
+          COURSEACCESS_URL: ${{ steps.publish.outputs.deployment-url }}
+        run: node scripts/verify-admin-analytics-live.mjs
 
       - name: Exercise the real deployed site on desktop and mobile
         if: steps.credentials.outputs.ready == 'true'
