@@ -75,5 +75,10 @@ base.vars.COURSEACCESS_LIVE_CHECKOUT_ENABLED='false';
 base.vars.COURSEACCESS_PAID_FEATURES_ENABLED='false';
 
 writeFileSync(tmp,JSON.stringify(base,null,2),{encoding:'utf8',mode:0o600});
+const ledger=JSON.parse(cmd(['execute','DB','--remote','--config',tmp,'--json','--command','SELECT name FROM d1_migrations']));
+if(!Array.isArray(ledger)||ledger.some(r=>r.success===false))throw Error('Migration ledger could not be inspected');
+const tracked=new Set(ledger.flatMap(r=>r.results||[]).map(r=>r.name));
+const untracked=['0003_paddle_event_inbox.sql','0004_paddle_checkout_intents.sql','0005_paddle_subscription_holds.sql','0006_paddle_owners_and_history.sql','0007_paddle_catalog_lifecycle.sql'].filter(x=>!tracked.has(x));
+if(untracked.length)console.log('Existing manual schema is not yet tracked by Wrangler: '+untracked.join(', '));
 console.log('Verified production D1 binding, schema and approved origin.');
 console.log('Generated temporary release config; account activation requires successful deployment.');
