@@ -18,6 +18,7 @@ describe('untrusted account must never unlock premium',()=>{
     const plans=parsePlans(JSON.stringify([{tier:'pro',monthlyUsd:14,plannedMonthlyChecks:150,available:true}]));
     expect(plans.find(p=>p.tier==='pro')).toMatchObject({monthlyUsd:14,plannedMonthlyChecks:150,available:false});
   });
+  it('publishes only the fixed commercial tiers when explicitly enabled',()=>{const p=parsePlans(undefined,true);expect(p.filter(x=>x.available).map(x=>x.tier)).toEqual(['free','pro','institution']);expect(p.find(x=>x.tier==='pro')?.monthlyUsd).toBe(12);expect(p.find(x=>x.tier==='institution')?.monthlyUsd).toBe(79);});
   it('falls back safely on malformed configurations',()=>{
     expect(parsePlans('not-json')).toEqual(parsePlans());
   });

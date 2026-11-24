@@ -2,7 +2,7 @@ import type {Inspection,OcrLanguage} from '../types';
 import {PRODUCT} from '../config';
 import {inspectDocument} from './importDocument';
 import {semanticHtml,safeStem} from './export';
-import {auditReadingCopy,inferDocumentLanguage} from './semantics';
+import {inferDocumentLanguage} from './semantics';
 export interface BatchResult {name:string;status:'ready'|'failed';pageCount:number;findingCount:number;message:string}
 export interface BatchOptions {limit:number;ocr:boolean;language:OcrLanguage;taggedPdf:boolean;isCanceled:()=>boolean;onProgress:(message:string,rows:BatchResult[])=>void}
 export const BATCH_MAX_BYTES=150*1024*1024;

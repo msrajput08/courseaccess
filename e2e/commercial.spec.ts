@@ -1,0 +1,41 @@
+import {test,expect} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
+import JSZip from 'jszip';
+test('free pricing is honest; commercial plan links and checkout are explicitly gated',async({page})=>{
+ await page.route('**/api/plans',route=>route.fulfill({json:{billingEnabled:true}}));
+ await page.goto('/pricing');await expect(page.getByRole('link',{name:'Choose Professor Pro'})).toBeVisible();await expect(page.getByRole('link',{name:'Choose Institution'})).toHaveAttribute('href','/account?plan=institution');
+ const org='00000000-0000-4000-8000-000000000003';
+ await page.route('**/api/auth/status',route=>route.fulfill({json:{enabled:true,method:'passkey',billingEnabled:true}}));
+ await page.route('**/api/auth/me',route=>route.fulfill({json:{authenticated:true,account:{id:'mock-account',name:'Course reviewer'},organizations:[{id:org,display_name:'College',role:'owner'}],passkeyCount:1}}));
+ await page.route('**/api/billing/status',route=>route.fulfill({json:{authenticated:true,billingEnabled:true,subscription:null,institutions:[]}}));
+ await page.route('**/api/billing/checkout-config',route=>route.fulfill({json:{enabled:true}}));
+ let captured:unknown=null;
+ await page.route('**/api/billing/checkout-intent',route=>{captured=route.request().postDataJSON();return route.fulfill({status:201,json:{transactionId:'txn_'+'a'.repeat(26)}});});
+ await page.route('**/checkout?_ptxn=*',route=>route.fulfill({contentType:'text/html',body:'<h1>Mock checkout — no purchase</h1>'}));
+ await page.getByRole('link',{name:'Choose Institution'}).click();
+ await expect(page.getByRole('heading',{name:'Upgrade your workflow'})).toBeVisible();
+ await page.getByLabel('Institution owner account').selectOption(org);
+ await page.getByRole('button',{name:'Continue to secure checkout'}).click();
+ await expect(page.getByRole('heading',{name:'Mock checkout — no purchase'})).toBeVisible();
+ expect(captured).toEqual({tier:'institution',organizationId:org});
+});
+test('paid batch actually generates reading drafts, findings and summary ZIP',async({page})=>{
+ await page.route('**/api/entitlements',route=>route.fulfill({json:{authenticated:true,paidFeaturesEnabled:true,batchLimit:10,features:{'batch-review':true,'history-cloud':true}}}));
+ await page.route('**/api/billing/review-history',route=>route.fulfill({json:{history:[],saved:true}}));
+ await page.goto('/workspace');
+ await expect(page.getByRole('heading',{name:'Batch review studio'})).toBeVisible();
+ await page.getByLabel('Choose teaching documents').setInputFiles([{name:'lecture-one.txt',mimeType:'text/plain',buffer:Buffer.from('Accessibility in the classroom.\nFirst lesson.')},{name:'lecture-two.txt',mimeType:'text/plain',buffer:Buffer.from('An inclusive second lesson.') }]);
+ await page.getByRole('button',{name:'Build review package'}).click();
+ await expect(page.getByText('2 document(s) ready for review.')).toBeVisible({timeout:30000});
+ const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download ZIP'}).click();const zip=await JSZip.loadAsync(await readFile(await (await download).path()));
+ expect(await zip.file('review-summary.csv')!.async('string')).toContain('lecture-one.txt');
+ expect(await zip.file('01-lecture-one/reading-draft.html')!.async('string')).toContain('Accessibility in the classroom.');
+ expect(JSON.parse(await zip.file('02-lecture-two/inspection.json')!.async('string')).reviewRequired).toBe(true);
+ const post=page.waitForRequest(r=>r.url().endsWith('/api/billing/review-history')&&r.method()==='POST');
+ await page.getByRole('button',{name:'Save numeric review summaries'}).click();
+ const data=(await post).postDataJSON();expect(data.summaries).toHaveLength(2);expect(JSON.stringify(data)).not.toContain('lecture-one');
+});
+test('anonymous workspace never offers paid batch start',async({page})=>{
+ await page.route('**/api/entitlements',route=>route.fulfill({json:{authenticated:false,batchLimit:0,features:{'batch-review':false,'history-cloud':false}}}));
+ await page.goto('/workspace');await expect(page.getByRole('heading',{name:'Batch review studio'})).toBeVisible();await expect(page.getByRole('button',{name:'Build review package'})).toHaveCount(0);
+});

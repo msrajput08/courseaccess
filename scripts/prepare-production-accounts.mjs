@@ -71,8 +71,9 @@ const missing=required.filter(x=>!names.has(x));
 if(missing.length)throw Error('Refusing account activation: remote schema incomplete: '+missing.join(', '));
 base.vars.COURSEACCESS_LIVE_WEBHOOK_INBOX_ENABLED='true';
 base.vars.COURSEACCESS_PADDLE_RECONCILE_ENABLED='true';
-base.vars.COURSEACCESS_LIVE_CHECKOUT_ENABLED='false';
-base.vars.COURSEACCESS_PAID_FEATURES_ENABLED='false';
+const commercial=process.env.COURSEACCESS_COMMERCIAL_RELEASE==='owner-approved-verified-launch';
+base.vars.COURSEACCESS_LIVE_CHECKOUT_ENABLED=commercial?'true':'false';
+base.vars.COURSEACCESS_PAID_FEATURES_ENABLED=commercial?'true':'false';
 
 writeFileSync(tmp,JSON.stringify(base,null,2),{encoding:'utf8',mode:0o600});
 const ledger=JSON.parse(cmd(['execute','DB','--remote','--config',tmp,'--json','--command','SELECT name FROM d1_migrations']));

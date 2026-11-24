@@ -4,10 +4,10 @@ import {readFileSync,readdirSync} from 'node:fs';
 import type {Database,Statement} from '../server/accountSecurity';
 import {sha256} from '../server/accountSecurity';
 import {handleLiveWebhook,retryPaddleInbox,type BillingEnv} from '../server/billingApi';
-import {handleEntitlements} from '../server/paidAccess';
+import {handleEntitlements,handlePaidReviewHistory} from '../server/paidAccess';
 import {handleScopeChange} from '../server/billingScope';
 import {handleBillingPortal} from '../server/billingPortal';
-import {PRICE_IDS} from '../server/liveCheckout';
+import {PRICE_IDS,createCheckoutIntent,type LiveCheckoutEnv} from '../server/liveCheckout';
 import {createHmac} from 'node:crypto';
 const origin='https://courseaccess.minty-12-shar.workers.dev',secret='fixture-not-real';
 const account='00000000-0000-4000-8000-000000000001',other='00000000-0000-4000-8000-000000000002';
@@ -103,6 +103,56 @@ describe('signed Paddle lifecycle against migrated SQLite',()=>{
    update('active',{current_billing_period:period});await event('subscription.updated',sub);expect(await access()).toBe(true);
    await event('adjustment.updated',adj);expect(await access()).toBe(false);
    update('active');await event('subscription.updated',sub);expect(await access()).toBe(false);
+  }finally{vi.unstubAllGlobals();sqlite.close();}
+ });
+});
+
+describe('commercial checkout with real migrated SQLite',()=>{
+ it.each(['pro','institution'] as const)('creates one verified %s intent, fulfils it and enforces plan-specific batch access',async tier=>{
+  const sqlite=new DatabaseSync(':memory:');
+  try{
+   for(const filename of readdirSync('migrations').filter(x=>x.endsWith('.sql')).sort())sqlite.exec(readFileSync('migrations/'+filename,'utf8'));
+   const DB=adapter(sqlite),now=Date.now(),org='00000000-0000-4000-8000-000000000003';
+   for(const [id,name,t] of [[account,'Owner',token],[other,'Other',otherToken]]){
+    sqlite.prepare('INSERT INTO accounts(id,display_name,created_at_ms) VALUES(?,?,?)').run(id,name,now);
+    sqlite.prepare('INSERT INTO sessions(token_hash,account_id,issued_at_ms,expires_at_ms) VALUES(?,?,?,?)').run(await sha256(t),id,now,now+86400000);
+   }
+   sqlite.prepare('INSERT INTO organizations(id,display_name,created_by,created_at_ms) VALUES(?,?,?,?)').run(org,'College',account,now);
+   sqlite.prepare("INSERT INTO organization_members VALUES(?,?, 'owner',?)").run(org,account,now);
+   sqlite.prepare("INSERT INTO organization_members VALUES(?,?, 'viewer',?)").run(org,other,now);
+   const env:LiveCheckoutEnv={DB,COURSEACCESS_AUTH_ORIGIN:origin,COURSEACCESS_ACCOUNTS_ENABLED:'true',COURSEACCESS_LIVE_WEBHOOK_INBOX_ENABLED:'true',COURSEACCESS_PADDLE_RECONCILE_ENABLED:'true',COURSEACCESS_LIVE_CHECKOUT_ENABLED:'true',COURSEACCESS_PAID_FEATURES_ENABLED:'true',PADDLE_LIVE_WEBHOOK_SECRET:secret,PADDLE_LIVE_API_KEY:'pdl_live_apikey_fixture',PADDLE_LIVE_CLIENT_TOKEN:'live_fixture'};
+   let reference='',created=0,completed=false,canceled=false;
+   const item={quantity:1,price:{id:PRICE_IDS[tier],product_id:tier==='pro'?'pro_01m87ccf14cemskhymbze0w9gd':'pro_01m87cg6jmsj8ptqynxa1rf10h'}};
+   const period={starts_at:new Date(now-1000).toISOString(),ends_at:new Date(now+86400000).toISOString()};
+   vi.stubGlobal('fetch',vi.fn(async(input:unknown,init?:RequestInit)=>{
+    const path=new URL(String(input)).pathname;
+    if(path==='/transactions'&&init?.method==='POST'){
+     const body=JSON.parse(String(init.body));expect(body.items).toEqual([{price_id:PRICE_IDS[tier],quantity:1}]);expect(body.collection_mode).toBe('automatic');reference=body.custom_data.courseaccess_intent;created++;
+     return Response.json({data:{id:tx,status:'draft',custom_data:{courseaccess_intent:reference}}});
+    }
+    if(path==='/transactions/'+tx)return Response.json({data:{id:tx,status:completed?'completed':'draft',subscription_id:completed?sub:null,customer_id:customer,items:[item],custom_data:{courseaccess_intent:reference}}});
+    if(path==='/subscriptions/'+sub)return Response.json({data:{id:sub,customer_id:customer,status:canceled?'canceled':'active',updated_at:new Date(now+(canceled?5000:0)).toISOString(),current_billing_period:canceled?null:period,items:[item],custom_data:{courseaccess_intent:reference}}});
+    return new Response(null,{status:404});
+   }));
+   const req=(body:Record<string,unknown>,t?:string,path='/api/billing/checkout-intent')=>new Request(origin+path,{method:'POST',headers:{origin,'content-type':'application/json',...(t?{cookie:'__Host-courseaccess='+t}:{})},body:JSON.stringify(body)});
+   const payload={tier,...(tier==='institution'?{organizationId:org}:{})};
+   expect((await createCheckoutIntent(req(payload),env)).status).toBe(401);
+   if(tier==='institution')expect((await createCheckoutIntent(req(payload,otherToken),env)).status).toBe(403);
+   const started=await createCheckoutIntent(req(payload,token),env);expect(started.status).toBe(201);expect((await started.json()).transactionId).toBe(tx);
+   expect((await createCheckoutIntent(req(payload,token),env)).status).toBe(200);expect(created).toBe(1);
+   const fire=async(type:string,id:string,n:string)=>{const raw=JSON.stringify({event_id:'evt_'+n.repeat(26),event_type:type,occurred_at:new Date().toISOString(),data:{id}});const ts=Math.floor(Date.now()/1000),sig='ts='+ts+';h1='+createHmac('sha256',secret).update(ts+':'+raw).digest('hex');const result=await handleLiveWebhook(new Request(origin+'/api/billing/webhook',{method:'POST',headers:{'content-type':'application/json','Paddle-Signature':sig},body:raw}),env);expect(result.status).toBe(200);expect((await result.json()).applied).toBe(true);};
+   const entitlement=async(t:string)=>(await (await handleEntitlements(new Request(origin+'/api/entitlements',{headers:{cookie:'__Host-courseaccess='+t}}),env)).json());
+   expect((await entitlement(token)).batchLimit).toBe(0);
+   completed=true;await fire('transaction.completed',tx,'a');
+   expect((await entitlement(token)).batchLimit).toBe(tier==='pro'?10:30);
+   expect((await entitlement(otherToken)).batchLimit).toBe(tier==='pro'?0:30);
+   expect((await createCheckoutIntent(req(payload,token),env)).status).toBe(409);expect(created).toBe(1);
+   const summaries=[{pageCount:2,findingCount:3},{pageCount:4,findingCount:1}];
+   const saved=await handlePaidReviewHistory(req({summaries},token,'/api/billing/review-history'),env);expect(saved.status).toBe(201);expect((await saved.json()).count).toBe(2);
+   expect(sqlite.prepare('SELECT COUNT(*) AS count FROM paid_review_history WHERE account_id=?').get(account)?.count).toBe(2);
+   expect(sqlite.prepare('SELECT COUNT(*) AS count FROM paid_review_history WHERE account_id=?').get(other)?.count).toBe(0);
+   expect((await handlePaidReviewHistory(req({summaries:Array(31).fill(summaries[0])},token,'/api/billing/review-history'),env)).status).toBe(400);
+   canceled=true;await fire('subscription.canceled',sub,'b');expect((await entitlement(token)).batchLimit).toBe(0);expect((await entitlement(otherToken)).batchLimit).toBe(0);
   }finally{vi.unstubAllGlobals();sqlite.close();}
  });
 });

@@ -4,15 +4,15 @@ import { makePdf, makeScannedJpegPdf } from './fixtures';
 test('live routes, API and SEO respond from the published Worker', async ({page,request},testInfo) => {
   const errors: string[] = [];
   page.on('pageerror',e=>errors.push(e.message));
-  const health=await request.get('/api/health');
+  const health=await request.get('/api/health',{maxRetries:2});
   expect(health.ok()).toBe(true);
   expect(await health.json()).toMatchObject({status:'ok',product:'CourseAccess'});
-  const xml=await request.get('/sitemap.xml');
+  const xml=await request.get('/sitemap.xml',{maxRetries:2});
   expect(xml.ok()).toBe(true);
   const sitemap=await xml.text();
   expect(sitemap).toContain('/checker');
   expect(sitemap).toContain('/refunds');
-  const robots=await request.get('/robots.txt');
+  const robots=await request.get('/robots.txt',{maxRetries:2});
   expect(robots.ok()).toBe(true);
   expect(await robots.text()).toContain('/sitemap.xml');
 
@@ -139,7 +139,7 @@ test('production Word DOCX imports and exports accessible HTML',async({page})=>{
 
 test('pricing and public legal policies are reachable and identify actual billing availability',async({page})=>{
   await page.goto('/pricing');
-  await expect(page.getByText('Not available yet · No checkout').first()).toBeVisible();
+  if(process.env.COURSEACCESS_EXPECT_COMMERCIAL==='true'){await expect(page.getByRole('link',{name:'Choose Professor Pro'})).toBeVisible({timeout:20000});await expect(page.getByRole('link',{name:'Choose Institution'})).toBeVisible();}else await expect(page.getByText('Not available yet · No checkout').first()).toBeVisible();
   for(const [path,title] of [['/terms','Terms of service'],['/privacy','Privacy policy'],['/refunds','Refund and cancellation policy']]){
     const res=await page.goto(path);
     expect(res?.status()).toBe(200);

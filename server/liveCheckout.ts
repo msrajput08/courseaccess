@@ -26,9 +26,9 @@ export async function owner(req:Request,env:LiveCheckoutEnv):Promise<string|null
   const row=await env.DB.prepare('SELECT s.account_id FROM sessions s JOIN accounts a ON a.id=s.account_id WHERE s.token_hash=? AND s.revoked_at_ms IS NULL AND s.expires_at_ms>? AND a.deleted_at_ms IS NULL').bind(await sha256(token),Date.now()).first<{account_id:string}>();
   return row?.account_id??null;
 }
-export async function paddleData(env:LiveCheckoutEnv,path:string,body?:unknown):Promise<Record<string,unknown>>{
+export async function paddleData(env:LiveCheckoutEnv,path:string,body?:unknown,method:'POST'|'PATCH'='POST'):Promise<Record<string,unknown>>{
   if(!env.PADDLE_LIVE_API_KEY?.startsWith('pdl_live_apikey_'))throw Error('Paddle API unavailable');
-  const r=await fetch('https://api.paddle.com'+path,{method:body===undefined?'GET':'POST',headers:{Authorization:'Bearer '+env.PADDLE_LIVE_API_KEY,Accept:'application/json','Content-Type':'application/json','Paddle-Version':'1'},body:body===undefined?undefined:JSON.stringify(body),redirect:'manual',signal:AbortSignal.timeout(8000)});
+  const r=await fetch('https://api.paddle.com'+path,{method:body===undefined?'GET':method,headers:{Authorization:'Bearer '+env.PADDLE_LIVE_API_KEY,Accept:'application/json','Content-Type':'application/json','Paddle-Version':'1'},body:body===undefined?undefined:JSON.stringify(body),redirect:'manual',signal:AbortSignal.timeout(8000)});
   if(!r.ok)throw Error('Paddle API request failed');
   const result=await r.json() as {data?:Record<string,unknown>};
   if(!result.data||typeof result.data!=='object'||Array.isArray(result.data))throw Error('Invalid Paddle response');
@@ -41,9 +41,22 @@ export async function createCheckoutIntent(req:Request,env:LiveCheckoutEnv):Prom
     const accountId=await owner(req,env);
     if(!accountId)return responseJSON({error:'Sign in to continue.'},401);
     const body=await readBody(req);
-    if(!validTier(body.tier))return responseJSON({error:'Unknown subscription plan.'},400);
     const db=env.DB!;
     await rateLimit(db,req,'billing-intent',12);
+    if(body.action==='cancel-pending'){
+      const pending=await db.prepare("SELECT i.id,i.transaction_id,i.state,o.owner_kind,o.owner_id FROM paddle_checkout_intents i JOIN paddle_intent_owners o ON o.intent_id=i.id WHERE i.account_id=? AND i.id NOT LIKE 'qa-%' AND i.state IN ('creating','ready','review') LIMIT 1").bind(accountId).first<{id:string;transaction_id:string|null;state:string;owner_kind:string;owner_id:string}>();
+      if(!pending)return responseJSON({canceled:true});
+      if(pending.state!=='ready'||!transactionId(pending.transaction_id))return responseJSON({error:'An ambiguous checkout needs support reconciliation before another purchase.'},409);
+      if(pending.owner_kind==='organization'&&!await db.prepare("SELECT 1 FROM organization_members WHERE organization_id=? AND account_id=? AND role='owner'").bind(pending.owner_id,accountId).first())return responseJSON({error:'Only the institution owner may manage its checkout.'},403);
+      const remote=await paddleData(env,'/transactions/'+pending.transaction_id);
+      if(remote.id!==pending.transaction_id||(remote.custom_data as Record<string,unknown>|null)?.courseaccess_intent!==pending.id||remote.subscription_id)return responseJSON({error:'Checkout identity or status requires reconciliation.'},409);
+      if(!['draft','ready','canceled'].includes(String(remote.status)))return responseJSON({error:'This transaction may already be processing. Check your billing status.'},409);
+      const canceled=remote.status==='canceled'?remote:await paddleData(env,'/transactions/'+pending.transaction_id,{status:'canceled'},'PATCH');
+      if(canceled.id!==pending.transaction_id||canceled.status!=='canceled')return responseJSON({error:'Checkout cancellation was not confirmed.'},409);
+      await db.prepare("UPDATE paddle_checkout_intents SET state='canceled' WHERE id=? AND transaction_id=? AND state='ready'").bind(pending.id,pending.transaction_id).run();
+      return responseJSON({canceled:true});
+    }
+    if(!validTier(body.tier))return responseJSON({error:'Unknown subscription plan.'},400);
     const kind=body.tier==='institution'?'organization':'account';
     const subject=kind==='organization'?body.organizationId:accountId;
     if(!validId(subject))return responseJSON({error:'Select an organization you own.'},400);
@@ -67,7 +80,7 @@ export async function createCheckoutIntent(req:Request,env:LiveCheckoutEnv):Prom
       const previous=await db.prepare("SELECT i.transaction_id,i.tier,i.state FROM paddle_checkout_intents i JOIN paddle_intent_owners o ON o.intent_id=i.id WHERE i.account_id=? AND o.owner_kind=? AND o.owner_id=? AND i.state IN ('creating','ready','review') LIMIT 1").bind(accountId,kind,subject).first<{transaction_id:string|null;tier:string;state:string}>();
       if(previous?.state==='ready'&&previous.tier===body.tier&&transactionId(previous.transaction_id)){
         const tx=await paddleData(env,'/transactions/'+previous.transaction_id);
-        if(tx.id===previous.transaction_id&&['draft','ready','past_due'].includes(String(tx.status)))return responseJSON({transactionId:previous.transaction_id});
+        if(tx.id===previous.transaction_id&&['draft','ready'].includes(String(tx.status))&&!tx.subscription_id)return responseJSON({transactionId:previous.transaction_id});
         if(tx.id===previous.transaction_id&&tx.status==='canceled'){
           await db.prepare("UPDATE paddle_checkout_intents SET state='canceled' WHERE transaction_id=? AND state='ready'").bind(previous.transaction_id).run();
           return responseJSON({error:'Previous checkout was canceled. Start a new checkout.'},409);

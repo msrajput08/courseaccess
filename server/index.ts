@@ -56,6 +56,7 @@ export default {
     if(url.pathname==='/api/billing/private-test'&&request.method==='GET')return secure(await handlePrivateTestStatus(request,env));
     if(url.pathname==='/api/billing/status'&&request.method==='GET')return secure(await handleBillingStatus(request,env));
     if(url.pathname==='/api/health'&&request.method==='GET')return reply({status:'ok',product:'CourseAccess',documentStorage:false});
+    if(url.pathname==='/api/auth/status'&&request.method==='GET'){const auth=await handleAccountApi(request,env);if(!auth.ok)return secure(auth);const data=await auth.json() as Record<string,unknown>;return reply({...data,billingEnabled:checkoutEnabled(request,env)});}
     if(url.pathname.startsWith('/api/auth/')||url.pathname.startsWith('/api/organizations'))return secure(await handleAccountApi(request,env));
     if(url.pathname==='/api/plans'&&request.method==='GET')return reply({plans:parsePlans(undefined,checkoutEnabled(request,env)),billingEnabled:checkoutEnabled(request,env)});
     if(url.pathname==='/api/entitlements'&&request.method==='GET')return secure(await handleEntitlements(request,env));

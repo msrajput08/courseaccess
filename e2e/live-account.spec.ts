@@ -10,7 +10,7 @@ test('real production D1 passkey account registration, login and deletion',async
   }});
   const status=await request.get('/api/auth/status');
   expect(status.status()).toBe(200);
-  expect(await status.json()).toMatchObject({enabled:true,method:'passkey',billingEnabled:false});
+  expect(await status.json()).toMatchObject({enabled:true,method:'passkey',billingEnabled:process.env.COURSEACCESS_EXPECT_COMMERCIAL==='true'});
   const unauthenticated=await request.get('/api/auth/me');
   expect((await unauthenticated.json()).authenticated).toBe(false);
   await page.goto('/account');
@@ -45,5 +45,5 @@ test('live accounts reject CSRF, invalid registration and unprovisioned billing'
   expect(denied.status()).toBe(403);
   const plans=await request.get('/api/plans');
   expect(plans.status()).toBe(200);
-  expect((await plans.json()).billingEnabled).toBe(false);
+  expect((await plans.json()).billingEnabled).toBe(process.env.COURSEACCESS_EXPECT_COMMERCIAL==='true');
 });
