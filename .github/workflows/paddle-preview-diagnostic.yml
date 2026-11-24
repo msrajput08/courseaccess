@@ -1,0 +1,20 @@
+name: Paddle private checkout preview diagnostic
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/paddle-preview-diagnostic.yml','scripts/paddle-preview-diagnostic.mjs']
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Diagnose live preview without creating a transaction
+        env:
+          PADDLE_LIVE_API_KEY: ${{ secrets.PADDLE_LIVE_API_KEY }}
+        run: node scripts/paddle-preview-diagnostic.mjs
