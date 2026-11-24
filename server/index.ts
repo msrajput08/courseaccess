@@ -1,3 +1,4 @@
+import {publicOffers} from './launchOffers';
 import {handleAccountApi} from './accountApi';
 import {defaultPaymentPage} from './defaultPaymentPage';
 import {handleBillingPortal} from './billingPortal';
@@ -8,7 +9,7 @@ import type {AccountEnv} from './accountSecurity';
 import {parsePlans} from './entitlements';
 import {handleEntitlements,handlePaidReviewHistory} from './paidAccess';
 import {checkoutConfig,createCheckoutIntent,checkoutEnabled} from './liveCheckout';
-type Env=AccountEnv & BillingEnv & {COURSEACCESS_LIVE_CHECKOUT_ENABLED?:string;COURSEACCESS_LIVE_PRICE_PREVIEW_ENABLED?:string} & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; PADDLE_LIVE_CLIENT_TOKEN?:string; };
+type Env=AccountEnv & BillingEnv & {COURSEACCESS_LIVE_CHECKOUT_ENABLED?:string;COURSEACCESS_LIVE_PRICE_PREVIEW_ENABLED?:string;COURSEACCESS_LAUNCH_OFFERS?:string} & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; PADDLE_LIVE_CLIENT_TOKEN?:string; };
 const jsonHeaders={'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'};
 const knownPaths=['/','/checker','/pricing','/guides','/guides/pdf-accessibility-checker','/guides/accessible-lecture-notes','/guides/fix-inaccessible-pdfs','/guides/math-accessibility','/guides/academic-documents','/privacy','/terms','/refunds'];
 const navigationPaths=new Set(['/','/checker','/workspace','/account','/pricing','/guides','/privacy','/terms','/refunds']);
@@ -58,7 +59,7 @@ export default {
     if(url.pathname==='/api/health'&&request.method==='GET')return reply({status:'ok',product:'CourseAccess',documentStorage:false});
     if(url.pathname==='/api/auth/status'&&request.method==='GET'){const auth=await handleAccountApi(request,env);if(!auth.ok)return secure(auth);const data=await auth.json() as Record<string,unknown>;return reply({...data,billingEnabled:checkoutEnabled(request,env)});}
     if(url.pathname.startsWith('/api/auth/')||url.pathname.startsWith('/api/organizations'))return secure(await handleAccountApi(request,env));
-    if(url.pathname==='/api/plans'&&request.method==='GET')return reply({plans:parsePlans(undefined,checkoutEnabled(request,env)),billingEnabled:checkoutEnabled(request,env)});
+    if(url.pathname==='/api/plans'&&request.method==='GET')return reply({plans:parsePlans(undefined,checkoutEnabled(request,env)),billingEnabled:checkoutEnabled(request,env),offers:checkoutEnabled(request,env)?publicOffers(env.COURSEACCESS_LAUNCH_OFFERS):{pro:null,institution:null}});
     if(url.pathname==='/api/entitlements'&&request.method==='GET')return secure(await handleEntitlements(request,env));
     if(url.pathname==='/api/billing/review-history'&&['GET','POST','DELETE'].includes(request.method))return secure(await handlePaidReviewHistory(request,env));
     if(url.pathname==='/api/billing/checkout-config'&&request.method==='GET')return secure(checkoutConfig(request,env));

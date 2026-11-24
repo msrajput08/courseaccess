@@ -74,6 +74,7 @@ base.vars.COURSEACCESS_PADDLE_RECONCILE_ENABLED='true';
 const commercial=process.env.COURSEACCESS_COMMERCIAL_RELEASE==='owner-approved-verified-launch';
 base.vars.COURSEACCESS_LIVE_CHECKOUT_ENABLED=commercial?'true':'false';
 base.vars.COURSEACCESS_PAID_FEATURES_ENABLED=commercial?'true':'false';
+if(commercial){base.vars.COURSEACCESS_LAUNCH_OFFERS=readFileSync(process.env.RUNNER_TEMP+'/courseaccess-launch-offers.json','utf8');}
 
 writeFileSync(tmp,JSON.stringify(base,null,2),{encoding:'utf8',mode:0o600});
 const ledger=JSON.parse(cmd(['execute','DB','--remote','--config',tmp,'--json','--command','SELECT name FROM d1_migrations']));

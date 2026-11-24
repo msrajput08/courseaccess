@@ -1,0 +1,19 @@
+name: Verify live launch discounts
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/verify-launch-offers.mjs','.github/workflows/paddle-launch-offer-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/verify-launch-offers.mjs
+        env:
+          PADDLE_LIVE_API_KEY: ${{ secrets.PADDLE_LIVE_API_KEY }}

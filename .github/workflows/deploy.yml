@@ -120,6 +120,7 @@ jobs:
         run: |
           node scripts/paddle-launch-cleanup.mjs
           node scripts/paddle-production-audit.mjs
+          node scripts/verify-launch-offers.mjs
 
       - name: Verify provisioned production D1 and bind exact workers.dev origin
         if: steps.credentials.outputs.ready == 'true'
@@ -230,4 +231,4 @@ jobs:
 
       - name: Delete the ephemeral D1 binding config from the runner
         if: always()
-        run: rm -f .wrangler-courseaccess-active.jsonc "$RUNNER_TEMP/courseaccess-paddle-secrets.json"
+        run: rm -f .wrangler-courseaccess-active.jsonc "$RUNNER_TEMP/courseaccess-paddle-secrets.json" "$RUNNER_TEMP/courseaccess-launch-offers.json"

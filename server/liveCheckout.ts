@@ -1,3 +1,4 @@
+import {configuredOffer,publicOffers,validOffer} from './launchOffers';
 import {activeAccountService,getCookie,sessionCookie,sha256,responseJSON,requireSameOrigin,readBody,ApiError,validId,rateLimit,type AccountEnv} from './accountSecurity';
 import {inboxEnabled,type BillingEnv} from './billingApi';
 export const PRICE_IDS={pro:'pri_01m87cf8a3d6nedgenr8jmhzwc',institution:'pri_01m87chg5xqcnggt17wvsknvw9'} as const;
@@ -8,6 +9,7 @@ export interface LiveCheckoutEnv extends AccountEnv,BillingEnv {
   PADDLE_LIVE_CLIENT_TOKEN?:string;
   COURSEACCESS_LIVE_CHECKOUT_ENABLED?:string;
   COURSEACCESS_LIVE_PRICE_PREVIEW_ENABLED?:string;
+  COURSEACCESS_LAUNCH_OFFERS?:string;
 }
 export const validTier=(v:unknown):v is CheckoutTier=>v==='pro'||v==='institution';
 export const transactionId=(v:unknown):v is string=>typeof v==='string'&&/^txn_[a-z0-9]{26}$/.test(v);
@@ -17,7 +19,7 @@ export function checkoutEnabled(req:Request,env:LiveCheckoutEnv):boolean{
 export function checkoutConfig(req:Request,env:LiveCheckoutEnv):Response{
   const enabled=checkoutEnabled(req,env);
   const preview=(enabled||env.COURSEACCESS_LIVE_PRICE_PREVIEW_ENABLED==='true')&&new URL(req.url).origin===origin&&!!env.PADDLE_LIVE_CLIENT_TOKEN?.startsWith('live_');
-  return responseJSON({enabled,preview,clientToken:preview?env.PADDLE_LIVE_CLIENT_TOKEN:null});
+  return responseJSON({enabled,preview,clientToken:preview?env.PADDLE_LIVE_CLIENT_TOKEN:null,...(enabled&&env.COURSEACCESS_LAUNCH_OFFERS?{offers:publicOffers(env.COURSEACCESS_LAUNCH_OFFERS)}:{})});
 }
 export async function owner(req:Request,env:LiveCheckoutEnv):Promise<string|null>{
   if(!activeAccountService(req,env)||!env.DB)return null;
@@ -66,6 +68,8 @@ export async function createCheckoutIntent(req:Request,env:LiveCheckoutEnv):Prom
     }
     const subscribed=await db.prepare("SELECT id FROM subscriptions WHERE owner_kind=? AND owner_id=? AND provider='paddle' AND status IN ('active','trialing','past_due') LIMIT 1").bind(kind,subject).first();
     if(subscribed)return responseJSON({error:'Manage your existing subscription.'},409);
+    const launch=configuredOffer(env.COURSEACCESS_LAUNCH_OFFERS,body.tier);
+    if(launch){const d=await paddleData(env,'/discounts/'+launch.id);if(!validOffer(d,body.tier)||d.id!==launch.id||d.expires_at!==launch.offer.expiresAt)return responseJSON({error:'Launch offer temporarily unavailable. No checkout created.'},503);}
     const intentId=crypto.randomUUID();
     // One unresolved intent per account. A network ambiguity must be reconciled
     // before creating another transaction; never blindly retry a charge flow.
@@ -89,8 +93,9 @@ export async function createCheckoutIntent(req:Request,env:LiveCheckoutEnv):Prom
       return responseJSON({error:'An existing checkout requires reconciliation.'},409);
     }
     try{
-      const data=await paddleData(env,'/transactions',{items:[{price_id:PRICE_IDS[body.tier],quantity:1}],collection_mode:'automatic',custom_data:{courseaccess_intent:intentId}});
+      const data=await paddleData(env,'/transactions',{items:[{price_id:PRICE_IDS[body.tier],quantity:1}],collection_mode:'automatic',...(launch?{discount_id:launch.id}:{}),custom_data:{courseaccess_intent:intentId}});
       if(!transactionId(data.id))throw Error('Missing transaction ID');
+      if(launch&&data.discount_id!==launch.id)throw Error('Launch discount not confirmed');
       await db.prepare("UPDATE paddle_checkout_intents SET transaction_id=?,state='ready' WHERE id=? AND state='creating'").bind(data.id,intentId).run();
       return responseJSON({transactionId:data.id},201);
     }catch{

@@ -2,8 +2,8 @@ import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 import JSZip from 'jszip';
 test('free pricing is honest; commercial plan links and checkout are explicitly gated',async({page})=>{
- await page.route('**/api/plans',route=>route.fulfill({json:{billingEnabled:true}}));
- await page.goto('/pricing');await expect(page.getByRole('link',{name:'Choose Professor Pro'})).toBeVisible();await expect(page.getByRole('link',{name:'Choose Institution'})).toHaveAttribute('href','/account?plan=institution');
+ await page.route('**/api/plans',route=>route.fulfill({json:{billingEnabled:true,offers:{pro:{monthly:9,regular:12,percent:25,months:12,expiresAt:'2026-12-25T23:59:00Z'},institution:{monthly:69,regular:79,percent:12.66,months:12,expiresAt:'2026-12-25T23:59:00Z'}}}}));
+ await page.goto('/pricing');await expect(page.getByText('Launch offer · 25% off')).toBeVisible();await expect(page.getByText('Launch offer · 12.66% off')).toBeVisible();await expect(page.getByRole('link',{name:'Choose Professor Pro'})).toBeVisible();await expect(page.getByRole('link',{name:'Choose Institution'})).toHaveAttribute('href','/account?plan=institution');
  const org='00000000-0000-4000-8000-000000000003';
  await page.route('**/api/auth/status',route=>route.fulfill({json:{enabled:true,method:'passkey',billingEnabled:true}}));
  await page.route('**/api/auth/me',route=>route.fulfill({json:{authenticated:true,account:{id:'mock-account',name:'Course reviewer'},organizations:[{id:org,display_name:'College',role:'owner'}],passkeyCount:1}}));
@@ -11,7 +11,7 @@ test('free pricing is honest; commercial plan links and checkout are explicitly 
  await page.route('**/api/billing/checkout-config',route=>route.fulfill({json:{enabled:true}}));
  let captured:unknown=null;
  await page.route('**/api/billing/checkout-intent',route=>{captured=route.request().postDataJSON();return route.fulfill({status:201,json:{transactionId:'txn_'+'a'.repeat(26)}});});
- await page.route('**/checkout?_ptxn=*',route=>route.fulfill({contentType:'text/html',body:'<h1>Mock checkout — no purchase</h1>'}));
+ await page.route(url=>url.pathname==='/checkout'&&url.searchParams.has('_ptxn'),route=>route.fulfill({contentType:'text/html',body:'<h1>Mock checkout — no purchase</h1>'}));
  await page.getByRole('link',{name:'Choose Institution'}).click();
  await expect(page.getByRole('heading',{name:'Upgrade your workflow'})).toBeVisible();
  await page.getByLabel('Institution owner account').selectOption(org);
