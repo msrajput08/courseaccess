@@ -1,0 +1,2 @@
+# Worker transport fix
+Cloudflare Workers reject fetch redirect:error before sending the request. Use redirect:manual and fail on all non-2xx responses, preventing credential forwarding. This applies to both direct discount lookup and all canonical Paddle requests, including webhooks and portal sessions. Live API preview diagnostics independently confirmed the catalog discount and zero total; production checkout requires a separate live browser verification. Reference: https://developers.cloudflare.com/workers/runtime-apis/request/.

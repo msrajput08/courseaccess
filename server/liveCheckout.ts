@@ -28,7 +28,7 @@ export async function owner(req:Request,env:LiveCheckoutEnv):Promise<string|null
 }
 export async function paddleData(env:LiveCheckoutEnv,path:string,body?:unknown):Promise<Record<string,unknown>>{
   if(!env.PADDLE_LIVE_API_KEY?.startsWith('pdl_live_apikey_'))throw Error('Paddle API unavailable');
-  const r=await fetch('https://api.paddle.com'+path,{method:body===undefined?'GET':'POST',headers:{Authorization:'Bearer '+env.PADDLE_LIVE_API_KEY,Accept:'application/json','Content-Type':'application/json','Paddle-Version':'1'},body:body===undefined?undefined:JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(8000)});
+  const r=await fetch('https://api.paddle.com'+path,{method:body===undefined?'GET':'POST',headers:{Authorization:'Bearer '+env.PADDLE_LIVE_API_KEY,Accept:'application/json','Content-Type':'application/json','Paddle-Version':'1'},body:body===undefined?undefined:JSON.stringify(body),redirect:'manual',signal:AbortSignal.timeout(8000)});
   if(!r.ok)throw Error('Paddle API request failed');
   const result=await r.json() as {data?:Record<string,unknown>};
   if(!result.data||typeof result.data!=='object'||Array.isArray(result.data))throw Error('Invalid Paddle response');

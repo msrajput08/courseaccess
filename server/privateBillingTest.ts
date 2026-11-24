@@ -32,14 +32,16 @@ export async function handlePrivateTestCheckout(req:Request,env:LiveCheckoutEnv)
   }
   const code=typeof body.code==='string'?body.code.trim().toUpperCase():'';
   if(!validPrivateCode(code))return responseJSON({error:'Invalid private verification code.'},400);
-  const reply=await fetch('https://api.paddle.com/discounts?code='+encodeURIComponent(code),{headers:{Authorization:'Bearer '+env.PADDLE_LIVE_API_KEY,Accept:'application/json','Paddle-Version':'1'},redirect:'error',signal:AbortSignal.timeout(8000)});
+  const reply=await fetch('https://api.paddle.com/discounts?code='+encodeURIComponent(code),{headers:{Authorization:'Bearer '+env.PADDLE_LIVE_API_KEY,Accept:'application/json','Paddle-Version':'1'},redirect:'manual',signal:AbortSignal.timeout(8000)});
   if(!reply.ok)return responseJSON({error:'Unable to verify private discount.'},503);
   const data=(await reply.json() as {data?:Record<string,unknown>[]}).data;
   if(!Array.isArray(data)||data.length!==1||!safeTestDiscount(data[0],code))return responseJSON({error:'Private discount invalid, expired or already used.'},403);
   const discountId=data[0].id;
   const input={items:[{price_id:PRICE_IDS.pro,quantity:1}],collection_mode:'automatic',discount_id:discountId};
-  const preview=await paddleData(env,'/transactions/preview',input);
+  let preview:Record<string,unknown>;
+  try{preview=await paddleData(env,'/transactions/preview',{items:input.items,discount_id:discountId,currency_code:'USD'});}catch{return responseJSON({error:'Paddle price preview unavailable; no transaction created.'},503);}
   if(obj(obj(preview.details)?.totals)?.total!=='0')return responseJSON({error:'Checkout preview was not zero. No transaction created.'},409);
+  if(body.action==='preview')return responseJSON({verified:true,total:0});
   if(await db.prepare("SELECT id FROM subscriptions WHERE owner_kind='account' AND owner_id=? AND provider='paddle' AND status IN ('active','trialing','past_due')").bind(account).first())return responseJSON({error:'An active subscription already exists.'},409);
   // Never create a second draft for a private code, even after a network ambiguity.
   const lock=await db.prepare('INSERT INTO auth_rate_limits(bucket,window_start_ms,hits) VALUES(?,?,1) ON CONFLICT(bucket) DO NOTHING').bind(await sha256('private-test:'+discountId),Date.now()).run();
