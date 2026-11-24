@@ -16,4 +16,5 @@ jobs:
           node-version: '22'
       - run: node scripts/verify-launch-offers.mjs
         env:
+          COURSEACCESS_FIX_UNUSED_INSTITUTION_OFFER: owner-approved
           PADDLE_LIVE_API_KEY: ${{ secrets.PADDLE_LIVE_API_KEY }}

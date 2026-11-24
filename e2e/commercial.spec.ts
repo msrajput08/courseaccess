@@ -11,12 +11,13 @@ test('free pricing is honest; commercial plan links and checkout are explicitly 
  await page.route('**/api/billing/checkout-config',route=>route.fulfill({json:{enabled:true}}));
  let captured:unknown=null;
  await page.route('**/api/billing/checkout-intent',route=>{captured=route.request().postDataJSON();return route.fulfill({status:201,json:{transactionId:'txn_'+'a'.repeat(26)}});});
- await page.route(url=>url.pathname==='/checkout'&&url.searchParams.has('_ptxn'),route=>route.fulfill({contentType:'text/html',body:'<h1>Mock checkout — no purchase</h1>'}));
+ await page.route(url=>url.pathname==='/checkout'&&url.searchParams.has('_ptxn'),route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><meta charset="utf-8"><h1>Mock checkout - no purchase</h1>'}));
  await page.getByRole('link',{name:'Choose Institution'}).click();
  await expect(page.getByRole('heading',{name:'Upgrade your workflow'})).toBeVisible();
  await page.getByLabel('Institution owner account').selectOption(org);
  await page.getByRole('button',{name:'Continue to secure checkout'}).click();
- await expect(page.getByRole('heading',{name:'Mock checkout — no purchase'})).toBeVisible();
+ await expect(page).toHaveURL(/\/checkout\?_ptxn=txn_[a-z0-9]{26}$/,{timeout:15000});
+ await expect(page.getByRole('heading',{name:'Mock checkout - no purchase'})).toBeVisible();
  expect(captured).toEqual({tier:'institution',organizationId:org});
 });
 test('paid batch actually generates reading drafts, findings and summary ZIP',async({page})=>{
