@@ -1,12 +1,12 @@
 import {owner,type LiveCheckoutEnv} from './liveCheckout';
 import {responseJSON,requireSameOrigin,readBody,ApiError,rateLimit} from './accountSecurity';
 export function paidPeriodValid(status:unknown,end:unknown,now=Date.now()):boolean{
- return status==='active'&&typeof end==='number'&&Number.isSafeInteger(end)&&end>now;
+ return status==='past_due'||((status==='active'||status==='trialing')&&typeof end==='number'&&Number.isSafeInteger(end)&&end>now);
 }
 async function access(req:Request,env:LiveCheckoutEnv){
  const account=await owner(req,env);
  if(!account||!env.DB||env.COURSEACCESS_PAID_FEATURES_ENABLED!=='true')return {account,pro:false,institution:false};
- const rows=await env.DB.prepare("SELECT s.tier,s.status,s.period_end_ms FROM subscriptions s WHERE s.provider='paddle' AND s.verified_at_ms IS NOT NULL AND s.provider_subscription_ref IS NOT NULL AND NOT EXISTS(SELECT 1 FROM paddle_subscription_holds h WHERE h.subscription_id=s.provider_subscription_ref) AND ((s.owner_kind='account' AND s.owner_id=? AND s.tier='pro') OR (s.owner_kind='organization' AND s.tier='institution' AND EXISTS(SELECT 1 FROM organization_members m WHERE m.organization_id=s.owner_id AND m.account_id=?)))").bind(account,account).all<{tier:string;status:string;period_end_ms:number}>();
+ const rows=await env.DB.prepare("SELECT s.tier,c.provider_status AS status,s.period_end_ms FROM subscriptions s JOIN paddle_subscription_catalog c ON c.subscription_id=s.provider_subscription_ref AND c.customer_id=s.provider_customer_ref AND c.scope_review=0 WHERE s.provider='paddle' AND s.verified_at_ms IS NOT NULL AND s.provider_subscription_ref IS NOT NULL AND NOT EXISTS(SELECT 1 FROM paddle_subscription_holds h WHERE h.subscription_id=s.provider_subscription_ref) AND ((s.owner_kind='account' AND s.owner_id=? AND s.tier='pro') OR (s.owner_kind='organization' AND s.tier='institution' AND EXISTS(SELECT 1 FROM organization_members m WHERE m.organization_id=s.owner_id AND m.account_id=?)))").bind(account,account).all<{tier:string;status:string;period_end_ms:number}>();
  const active=rows.results.filter(s=>paidPeriodValid(s.status,s.period_end_ms));
  return {account,pro:active.some(s=>s.tier==='pro'),institution:active.some(s=>s.tier==='institution')};
 }

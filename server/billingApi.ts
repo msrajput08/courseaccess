@@ -30,9 +30,9 @@ export async function handleBillingStatus(request:Request,env:BillingEnv):Promis
 export function inboxEvent(event:VerifiedPaddleEvent){
   // Store only provider identifiers and event metadata, not customer names,
   // addresses, payment instruments, document content or raw webhook bodies.
-  const relevant=/^(subscription|transaction|adjustment)\./.test(event.eventType);
+  const relevant=/^(subscription|transaction|adjustment|customer)\./.test(event.eventType);
   const objectId=event.data.id;
-  if(!relevant||typeof objectId!=='string'||!/^(sub|txn|adj)_[a-z0-9]{26}$/.test(objectId))return null;
+  if(!relevant||typeof objectId!=='string'||!/^(sub|txn|adj|ctm)_[a-z0-9]{26}$/.test(objectId))return null;
   return {id:event.eventId,type:event.eventType,occurred:Date.parse(event.occurredAt),objectId};
 }
 export async function handleLiveWebhook(request:Request,env:BillingEnv,ctx?:BillingExecutionContext):Promise<Response>{

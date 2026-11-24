@@ -3,7 +3,9 @@ import {paidPeriodValid,handleEntitlements,handlePaidReviewHistory} from '../ser
 describe('paid feature access',()=>{
  it('requires an active unexpired verified period',()=>{
   expect(paidPeriodValid('active',1001,1000)).toBe(true);
-  for(const status of ['trialing','past_due','canceled','paused'])expect(paidPeriodValid(status,1001,1000)).toBe(false);
+  expect(paidPeriodValid('trialing',1001,1000)).toBe(true);
+  expect(paidPeriodValid('past_due',999,1000)).toBe(true);
+  for(const status of ['canceled','paused'])expect(paidPeriodValid(status,1001,1000)).toBe(false);
   expect(paidPeriodValid('active',1000,1000)).toBe(false);
   expect(paidPeriodValid('active',null,1000)).toBe(false);
  });
