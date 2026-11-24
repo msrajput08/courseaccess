@@ -17,5 +17,7 @@ describe('production billing preparation',()=>{
     const e={eventId:'evt_'+'a'.repeat(26),eventType:'subscription.updated',occurredAt:'2026-11-24T00:00:00Z',data:{id:'sub_'+'b'.repeat(26),email:'private@example.invalid'}};
     expect(inboxEvent(e)).toEqual({id:e.eventId,type:e.eventType,occurred:Date.parse(e.occurredAt),objectId:e.data.id});
     expect(inboxEvent({...e,eventType:'customer.updated'})).toBeNull();
+    expect(inboxEvent({...e,eventType:'customer.updated',data:{id:'ctm_'+'c'.repeat(26),email:'private@example.invalid'}})).toEqual({id:e.eventId,type:'customer.updated',occurred:Date.parse(e.occurredAt),objectId:'ctm_'+'c'.repeat(26)});
+    expect(inboxEvent({...e,eventType:'product.updated'})).toBeNull();
   });
 });
