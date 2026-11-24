@@ -127,6 +127,7 @@ jobs:
         env:
           CLOUDFLARE_D1_READ_TOKEN: ${{ secrets.CLOUDFLARE_D1_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          COURSEACCESS_ADMIN_ACCOUNT_ID: ${{ secrets.COURSEACCESS_ADMIN_ACCOUNT_ID }}
           COURSEACCESS_ACTIVATE_PRODUCTION: authorized-workers-dev
           COURSEACCESS_COMMERCIAL_RELEASE: owner-approved-verified-launch
           PADDLE_LIVE_CLIENT_TOKEN: ${{ secrets.PADDLE_LIVE_CLIENT_TOKEN }}
@@ -221,6 +222,14 @@ jobs:
         env:
           COURSEACCESS_URL: ${{ steps.publish.outputs.deployment-url }}
         run: node scripts/verify-admin-analytics-live.mjs
+
+      - name: Verify administrator analytics read token and real dataset queries
+        if: steps.credentials.outputs.ready == 'true'
+        env:
+          COURSEACCESS_ANALYTICS_READ_TOKEN: ${{ secrets.COURSEACCESS_ANALYTICS_READ_TOKEN }}
+          COURSEACCESS_ADMIN_ACCOUNT_ID: ${{ secrets.COURSEACCESS_ADMIN_ACCOUNT_ID }}
+          COURSEACCESS_CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/verify-admin-dataset.mjs
 
       - name: Exercise the real deployed site on desktop and mobile
         if: steps.credentials.outputs.ready == 'true'

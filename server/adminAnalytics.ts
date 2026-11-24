@@ -5,7 +5,7 @@ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const pages=new Set(['/','/pricing','/checker','/workspace','/account','/checkout','/guides','/guides/pdf-accessibility-checker','/guides/accessible-lecture-notes','/guides/fix-inaccessible-pdfs','/guides/math-accessibility','/guides/academic-documents','/privacy','/terms','/refunds']);
 const sources=new Set(['email','search','social','internal','other-referral','direct-or-unknown']);
 export function analyticsQueries(days:1|7|30){
- const where=" FROM courseaccess_traffic WHERE timestamp >= toStartOfInterval(NOW(), INTERVAL '1' DAY) - INTERVAL '"+(days-1)+"' DAY AND timestamp <= NOW()";
+ const where=" FROM courseaccess_traffic WHERE timestamp >= toStartOfInterval(NOW(), INTERVAL '1' DAY)"+(days===1?"":" - INTERVAL '"+(days-1)+"' DAY")+" AND timestamp <= NOW()";
  const count='SUM(_sample_interval * double1) AS requests';
  return [
  "SELECT toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, blob1 AS page, "+count+where+" GROUP BY day,page ORDER BY day ASC LIMIT 500 FORMAT JSON",

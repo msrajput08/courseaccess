@@ -82,5 +82,14 @@ if(!Array.isArray(ledger)||ledger.some(r=>r.success===false))throw Error('Migrat
 const tracked=new Set(ledger.flatMap(r=>r.results||[]).map(r=>r.name));
 const untracked=['0003_paddle_event_inbox.sql','0004_paddle_checkout_intents.sql','0005_paddle_subscription_holds.sql','0006_paddle_owners_and_history.sql','0007_paddle_catalog_lifecycle.sql'].filter(x=>!tracked.has(x));
 if(untracked.length)console.log('Existing manual schema is not yet tracked by Wrangler: '+untracked.join(', '));
+const admin=process.env.COURSEACCESS_ADMIN_ACCOUNT_ID;
+if(admin){
+ if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(admin))throw Error('Admin account ID must be a CourseAccess UUID.');
+ let rows;
+ try{rows=JSON.parse(cmd(['execute','DB','--remote','--config',tmp,'--json','--command',"SELECT COUNT(*) AS total FROM accounts WHERE id='"+admin+"' AND deleted_at_ms IS NULL AND EXISTS (SELECT 1 FROM passkey_credentials WHERE account_id=accounts.id)"]));}
+ catch{throw Error('Unable to verify administrator account in D1.');}
+ if(!Array.isArray(rows)||rows.some(r=>r.success===false)||Number(rows[0]?.results?.[0]?.total)!==1)throw Error('Administrator account is missing, deleted or has no passkey.');
+ console.log('Verified designated administrator account exists with registered passkey.');
+}
 console.log('Verified production D1 binding, schema and approved origin.');
 console.log('Generated temporary release config; account activation requires successful deployment.');
