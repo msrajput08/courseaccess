@@ -19,7 +19,7 @@ for(const i of intents.filter(x=>x.state==='completed')){
  check('Test subscription canceled at Paddle',sub.status==='canceled');
  check('Test cancellation synchronized in D1',i.provider_status==='canceled');
 }
-const discounts=await paddle('/discounts?per_page=200');
+const discounts=await paddle('/discounts?per_page=200&status=active,archived');
 check('Private test discounts archived',Array.isArray(discounts)&&discounts.length<200&&discounts.filter(x=>x.description==='CourseAccess private live verification — zero cost').length>0&&discounts.filter(x=>x.description==='CourseAccess private live verification — zero cost').every(x=>x.status==='archived'));
 const destinations=await paddle('/notification-settings?per_page=200&active=true');
 check('Production webhook destination exists',destinations.filter(x=>x.destination===endpoint&&x.active===true).length===1);

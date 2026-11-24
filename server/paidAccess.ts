@@ -3,7 +3,7 @@ import {responseJSON,requireSameOrigin,readBody,ApiError,rateLimit} from './acco
 export function paidPeriodValid(status:unknown,end:unknown,now=Date.now()):boolean{
  return status==='past_due'||((status==='active'||status==='trialing')&&typeof end==='number'&&Number.isSafeInteger(end)&&end>now);
 }
-async function access(req:Request,env:LiveCheckoutEnv){
+export async function access(req:Request,env:LiveCheckoutEnv){
  const account=await owner(req,env);
  if(!account||!env.DB)return {account,pro:false,institution:false};
  const rows=await env.DB.prepare("SELECT s.tier,c.provider_status AS status,s.period_end_ms FROM subscriptions s JOIN paddle_subscription_catalog c ON c.subscription_id=s.provider_subscription_ref AND c.customer_id=s.provider_customer_ref AND c.scope_review=0 WHERE s.provider='paddle' AND (?=1 OR (s.id LIKE 'qa-%' AND s.owner_kind='account' AND s.tier='pro')) AND s.verified_at_ms IS NOT NULL AND s.provider_subscription_ref IS NOT NULL AND NOT EXISTS(SELECT 1 FROM paddle_subscription_holds h WHERE h.subscription_id=s.provider_subscription_ref) AND ((s.owner_kind='account' AND s.owner_id=? AND s.tier='pro') OR (s.owner_kind='organization' AND s.tier='institution' AND EXISTS(SELECT 1 FROM organization_members m WHERE m.organization_id=s.owner_id AND m.account_id=?)))").bind(env.COURSEACCESS_PAID_FEATURES_ENABLED==='true'?1:0,account,account).all<{tier:string;status:string;period_end_ms:number}>();
@@ -13,7 +13,7 @@ async function access(req:Request,env:LiveCheckoutEnv){
 export async function handleEntitlements(req:Request,env:LiveCheckoutEnv):Promise<Response>{
  try{
   const a=await access(req,env);
-  return responseJSON({authenticated:!!a.account,paidFeaturesEnabled:a.pro||a.institution,features:{'pdf-inspection':true,'semantic-html':true,'advanced-remediation':false,'history-cloud':a.pro||a.institution,'team-workspace':false}});
+  return responseJSON({authenticated:!!a.account,paidFeaturesEnabled:a.pro||a.institution,batchLimit:a.institution?30:a.pro?10:0,features:{'pdf-inspection':true,'semantic-html':true,'advanced-remediation':false,'history-cloud':a.pro||a.institution,'batch-review':a.pro||a.institution,'team-workspace':a.institution}});
  }catch{return responseJSON({error:'Entitlements unavailable.'},503);}
 }
 export async function handlePaidReviewHistory(req:Request,env:LiveCheckoutEnv):Promise<Response>{
@@ -33,12 +33,13 @@ export async function handlePaidReviewHistory(req:Request,env:LiveCheckoutEnv):P
   await rateLimit(db,req,'paid-review-history',100);
   const body=await readBody(req);
   const count=(v:unknown,min:number,max:number):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min&&v<=max;
-  if(!count(body.pageCount,1,10000)||!count(body.findingCount,0,100000))return responseJSON({error:'Invalid summary counts.'},400);
-  const id=crypto.randomUUID();
+  const entries=Array.isArray(body.summaries)?body.summaries:[body];
+  if(entries.length<1||entries.length>(a.institution?30:10)||entries.some(v=>!v||typeof v!=='object'||!count(v.pageCount,1,10000)||!count(v.findingCount,0,100000)))return responseJSON({error:'Invalid summary counts.'},400);
+  const now=Date.now();
   await db.batch([
-   db.prepare('INSERT INTO paid_review_history(id,account_id,page_count,finding_count,created_at_ms) VALUES(?,?,?,?,?)').bind(id,a.account,body.pageCount,body.findingCount,Date.now()),
+   ...entries.map(v=>db.prepare('INSERT INTO paid_review_history(id,account_id,page_count,finding_count,created_at_ms) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),a.account,v.pageCount,v.findingCount,now)),
    db.prepare('DELETE FROM paid_review_history WHERE account_id=? AND id NOT IN (SELECT id FROM paid_review_history WHERE account_id=? ORDER BY created_at_ms DESC,id DESC LIMIT 100)').bind(a.account,a.account),
   ]);
-  return responseJSON({saved:true},201);
+  return responseJSON({saved:true,count:entries.length},201);
  }catch(e){return e instanceof ApiError?responseJSON({error:e.message},e.status):responseJSON({error:'History unavailable.'},503);}
 }

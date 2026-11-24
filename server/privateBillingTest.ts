@@ -30,6 +30,7 @@ export async function handlePrivateTestCheckout(req:Request,env:LiveCheckoutEnv)
    if(result.id!==s.id||result.status!=='canceled')return responseJSON({error:'Cancellation not yet confirmed. Check Paddle.'},409);
    return responseJSON({canceled:true});
   }
+  if(env.COURSEACCESS_LIVE_CHECKOUT_ENABLED==='true')return responseJSON({error:'Private launch test is closed.'},410);
   const code=typeof body.code==='string'?body.code.trim().toUpperCase():'';
   if(!validPrivateCode(code))return responseJSON({error:'Invalid private verification code.'},400);
   const reply=await fetch('https://api.paddle.com/discounts?code='+encodeURIComponent(code),{headers:{Authorization:'Bearer '+env.PADDLE_LIVE_API_KEY,Accept:'application/json','Paddle-Version':'1'},redirect:'manual',signal:AbortSignal.timeout(8000)});

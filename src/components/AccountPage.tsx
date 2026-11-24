@@ -122,7 +122,7 @@ export default function AccountPage(){
   return <main className="shell account-page">
     <div className="eyebrow"><i/> YOUR SECURE SPACE</div>
     <div className="account-hero"><div><h1>Access built on <em>trust.</em></h1>
-      <p>Passkey security, private document processing and carefully scoped institution membership. New paid subscriptions are not available yet.</p>
+      <p>Passkey security, private document processing and carefully scoped institution membership. Manage your subscription and institution access in one place.</p>
     </div><div className="account-hero-symbol" aria-hidden="true"><ShieldCheck size={54}/></div></div>
     {message&&<p className="account-banner account-success" role="status"><CheckCircle2 size={18}/>{message}</p>}
     {problem&&<p className="account-banner account-error" role="alert">{problem}</p>}

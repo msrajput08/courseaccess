@@ -1,0 +1,3 @@
+import {describe,it,expect} from 'vitest';
+import {batchCsv,csvCell,validateBatch} from '../src/lib/batchReview';
+describe('commercial batch limits and exports',()=>{it('rejects over-limit and invalid file counts',()=>{const f=new File(['lesson'],'lesson.txt');expect(()=>validateBatch([f],10)).not.toThrow();expect(()=>validateBatch(Array(11).fill(f),10)).toThrow();expect(()=>validateBatch([f],0)).toThrow();expect(()=>validateBatch([new File([],'empty.txt')],10)).toThrow();});it('escapes CSV formulas and quotes',()=>{expect(csvCell('=1+1')).toBe('"\'=1+1"');expect(csvCell('a"b')).toBe('"a""b"');expect(batchCsv([{name:'lesson.txt',status:'ready',pageCount:1,findingCount:2,message:'Review'}])).toContain('lesson.txt');});});

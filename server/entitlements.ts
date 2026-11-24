@@ -19,8 +19,9 @@ export const BASE_PLANS: readonly Plan[] = Object.freeze([
   {tier:'pro',monthlyUsd:12,plannedMonthlyChecks:100,available:false},
   {tier:'institution',monthlyUsd:79,plannedMonthlyChecks:1000,available:false},
 ]);
-export function parsePlans(raw?:string): readonly Plan[] {
-  if(!raw)return BASE_PLANS;
+export function parsePlans(raw?:string,enabled=false): readonly Plan[] {
+  const commercial=()=>BASE_PLANS.map(p=>({...p,available:p.tier==='free'||(enabled&&(p.tier==='pro'||p.tier==='institution')),plannedMonthlyChecks:enabled?null:p.plannedMonthlyChecks}));
+  if(!raw)return commercial();
   try {
     const input:unknown=JSON.parse(raw);
     if(!Array.isArray(input))return BASE_PLANS;
@@ -33,7 +34,7 @@ export function parsePlans(raw?:string): readonly Plan[] {
         monthlyUsd:price===null||typeof price==='number'&&Number.isFinite(price)&&price>=0?price:base.monthlyUsd,
         plannedMonthlyChecks:limit===null||typeof limit==='number'&&Number.isInteger(limit)&&limit>=0?limit:base.plannedMonthlyChecks,
         // Keeping enabled:false for paid tiers until secure billing is configured.
-        available:base.tier==='free',
+        available:base.tier==='free'||(enabled&&(base.tier==='pro'||base.tier==='institution')),
       });
     }
     return plans;
