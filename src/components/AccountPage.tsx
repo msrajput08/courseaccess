@@ -164,7 +164,7 @@ export default function AccountPage(){
           <button className="button button-primary" disabled={working} onClick={createOrg}>Create organization <ArrowRight size={16}/></button>
         </section>
       </div>
-      <BillingManagement/>
+      <BillingManagement organizations={organizations.filter(o=>o.role==='owner')}/>
       <section className="account-panel account-membership">
         <h2>Organizations</h2>
         {organizations.length===0?<p>You are not in any institution workspace yet.</p>:
