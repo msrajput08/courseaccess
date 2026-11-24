@@ -41,14 +41,14 @@ describe('signed Paddle lifecycle against migrated SQLite',()=>{
    const period={starts_at:new Date(now-1000).toISOString(),ends_at:new Date(now+86400000).toISOString()};
    const pro={quantity:1,price:{id:PRICE_IDS.pro,product_id:'pro_01m87ccf14cemskhymbze0w9gd'}};
    const institution={quantity:1,price:{id:PRICE_IDS.institution,product_id:'pro_01m87cg6jmsj8ptqynxa1rf10h'}};
-   let canonical:Record<string,unknown>={id:sub,customer_id:customer,status:'active',email:'buyer@example.invalid',updated_at:new Date(now).toISOString(),current_billing_period:period,items:[pro],custom_data:{courseaccess_intent:intent}};
+   let canonical:Record<string,unknown>={id:sub,customer_id:customer,status:'active',updated_at:new Date(now).toISOString(),current_billing_period:period,items:[pro],custom_data:{courseaccess_intent:intent}};
    let unavailable=false;
    let emailCode='';
    env.COURSEACCESS_PORTAL_PROOF_SECRET='fixture-secret-longer-than-thirty-two-characters';env.COURSEACCESS_BILLING_FROM_EMAIL='billing@example.invalid';env.BILLING_EMAIL={async send(message){expect(message.to).toBe('buyer@example.invalid');emailCode=message.text.match(/[0-9a-f]{20}/)?.[0]||'';}};
    const fetchMock=vi.fn(async(input:unknown)=>{
     const path=new URL(String(input)).pathname;
     if(unavailable)return new Response(null,{status:503});
-    const data=path==='/subscriptions/'+sub?canonical:path==='/transactions/'+tx?{id:tx,status:'completed',subscription_id:sub,customer_id:customer,items:[pro],custom_data:{courseaccess_intent:intent}}:path==='/customers/'+customer?{id:customer,status:'active',updated_at:new Date(now).toISOString()}:path==='/customers/'+customer+'/portal-sessions'?{customer_id:customer,urls:{subscriptions:[{id:sub,view_subscription:'https://customer-portal.paddle.com/cpl_'+'e'.repeat(26)+'?action=view_subscription&subscription_id='+sub+'&token=pga_fixture'}]}}:path==='/adjustments/'+adj?{id:adj,subscription_id:sub,status:'approved',action:'refund'}:null;
+    const data=path==='/subscriptions/'+sub?canonical:path==='/transactions/'+tx?{id:tx,status:'completed',subscription_id:sub,customer_id:customer,items:[pro],custom_data:{courseaccess_intent:intent}}:path==='/customers/'+customer?{id:customer,status:'active',email:'buyer@example.invalid',updated_at:new Date(now).toISOString()}:path==='/customers/'+customer+'/portal-sessions'?{customer_id:customer,urls:{subscriptions:[{id:sub,view_subscription:'https://customer-portal.paddle.com/cpl_'+'e'.repeat(26)+'?action=view_subscription&subscription_id='+sub+'&token=pga_fixture'}]}}:path==='/adjustments/'+adj?{id:adj,subscription_id:sub,status:'approved',action:'refund'}:null;
     return data?Response.json({data}):new Response(null,{status:404});
    });
    vi.stubGlobal('fetch',fetchMock);
