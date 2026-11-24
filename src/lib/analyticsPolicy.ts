@@ -2,7 +2,7 @@ export const ANALYTICS_ORIGIN='https://courseaccess.minty-12-shar.workers.dev';
 export const GTM_CONTAINER='GTM-TDLVR6PD';
 const publicPaths=new Set(['/','/pricing','/guides','/guides/pdf-accessibility-checker','/guides/accessible-lecture-notes','/guides/fix-inaccessible-pdfs','/guides/math-accessibility','/guides/academic-documents']);
 export function isMarketingPath(path:string){return publicPaths.has(path);}
-const campaignKeys=new Set(['utm_source','utm_medium','utm_campaign','utm_content','utm_term','utm_id']);
+const campaignKeys=new Set(['utm_source','utm_medium','utm_campaign','utm_content','utm_term','utm_id','gtm_debug']);
 export function canLoadAnalytics(url:URL){
  if(url.origin!==ANALYTICS_ORIGIN||!isMarketingPath(url.pathname)||!['','#how','#content'].includes(url.hash))return false;
  const seen=new Set<string>();

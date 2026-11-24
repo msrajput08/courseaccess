@@ -1,4 +1,5 @@
 import {canLoadAnalytics,ANALYTICS_ORIGIN} from '../src/lib/analyticsPolicy';
+import {googleTagHead} from './googleTag';
 import {recordNavigation,type TrafficDataset} from './trafficAnalytics';
 import {publicOffers} from './launchOffers';
 import {handleAccountApi} from './accountApi';
@@ -40,11 +41,11 @@ const securityHeaders={
   'cross-origin-resource-policy':'same-origin',
   'permissions-policy':'camera=(), microphone=(), geolocation=(), payment=()',
 };
-function secure(response:Response,marketing=false,privateNavigation=false):Response {
+function secure(response:Response,marketing=false,privateNavigation=false,nonce?:string):Response {
   const headers=new Headers(response.headers);
   for(const [name,value] of Object.entries(securityHeaders))headers.set(name,value);
   if(marketing){
-    const csp=contentSecurityPolicy.replace("script-src 'self' 'wasm-unsafe-eval'","script-src 'self' 'wasm-unsafe-eval' https://www.googletagmanager.com").replace("connect-src 'self'","connect-src 'self' https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com").replace("img-src 'self' data: blob:","img-src 'self' data: blob: https://www.googletagmanager.com https://*.google-analytics.com");
+    const csp=contentSecurityPolicy.replace("script-src 'self' 'wasm-unsafe-eval'","script-src 'self' 'wasm-unsafe-eval' https://www.googletagmanager.com"+(nonce?" 'nonce-"+nonce+"'":"")).replace("connect-src 'self'","connect-src 'self' https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com").replace("img-src 'self' data: blob:","img-src 'self' data: blob: https://www.googletagmanager.com https://*.google-analytics.com");
     headers.set('content-security-policy',csp);
   }
   if(privateNavigation)headers.set('referrer-policy','no-referrer');
@@ -88,7 +89,15 @@ export default {
       headers.set('cache-control','no-store, no-cache, must-revalidate');
       headers.set('pragma','no-cache');
       headers.set('x-content-type-options','nosniff');
-      return secure(new Response(request.method==='HEAD'?null:shell.body,{status:shell.status,headers}),canLoadAnalytics(url),url.origin===ANALYTICS_ORIGIN&&!canLoadAnalytics(url));
+      const marketing=canLoadAnalytics(url);
+      if(request.method==='GET'&&marketing&&shell.ok&&headers.get('content-type')?.includes('text/html')){
+        const nonce=crypto.randomUUID().replace(/-/g,'');
+        const html=await shell.text();
+        const tagged=html.replace(/<head(?:\s[^>]*)?>/i,head=>head+'\n'+googleTagHead(nonce));
+        for(const name of ['content-length','content-encoding','etag','last-modified'])headers.delete(name);
+        return secure(new Response(tagged,{status:shell.status,headers}),true,false,nonce);
+      }
+      return secure(new Response(request.method==='HEAD'?null:shell.body,{status:shell.status,headers}),marketing,url.origin===ANALYTICS_ORIGIN&&!marketing);
     }
     return secure(await env.ASSETS.fetch(request));
   },
