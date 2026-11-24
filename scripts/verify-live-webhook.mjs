@@ -1,0 +1,14 @@
+import {createHmac,randomBytes} from 'node:crypto';
+const origin=(process.env.COURSEACCESS_URL||'').replace(/\/$/,'');
+const secret=process.env.PADDLE_LIVE_WEBHOOK_SECRET;
+if(origin!=='https://courseaccess.minty-12-shar.workers.dev'||!secret)throw Error('Expected origin or secret missing');
+const endpoint=origin+'/api/billing/webhook';
+const raw=JSON.stringify({event_id:'evt_'+randomBytes(13).toString('hex'),event_type:'webhook.test',occurred_at:new Date().toISOString(),data:{id:'test_no_payment'}});
+const post=signature=>fetch(endpoint,{method:'POST',headers:{'content-type':'application/json',...(signature?{'Paddle-Signature':signature}:{})},body:raw,signal:AbortSignal.timeout(5000)});
+const rejected=await post();
+if(rejected.status!==400)throw Error('Unsigned webhook was not rejected: '+rejected.status);
+const ts=Math.floor(Date.now()/1000),sig='ts='+ts+';h1='+createHmac('sha256',secret).update(ts+':'+raw).digest('hex');
+const start=performance.now(),accepted=await post(sig),ms=performance.now()-start;
+if(!accepted.ok||ms>=5000)throw Error('Signed endpoint did not acknowledge in five seconds: '+accepted.status);
+const data=await accepted.json();if(data.received!==true||data.ignored!==true||data.applied!==false)throw Error('Unexpected signed probe result');
+console.log('Live webhook signature test passed; unsigned requests rejected; signed non-payment event acknowledged in '+Math.round(ms)+' ms. No billing records or payment created.');

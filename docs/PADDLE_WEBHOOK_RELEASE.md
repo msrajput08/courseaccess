@@ -1,0 +1,2 @@
+# Production webhook release
+Preserves the live /checkout page. Signed event inbox and canonical reconciliation with retries are deployed separately from paid checkout and entitlement activation. Migration 0007 must exist before catalog reconciliation can be verified. The signed probe does not create a real payment. No new subscription purchase or access activation in this release. Direct customer portal sessions and ownership-scope changes require verified ownership linking.

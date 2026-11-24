@@ -1,8 +1,9 @@
 import {handleAccountApi} from './accountApi';
 import {defaultPaymentPage} from './defaultPaymentPage';
+import {handleLiveWebhook,retryPaddleInbox,handleBillingStatus,type BillingEnv,type BillingExecutionContext} from './billingApi';
 import type {AccountEnv} from './accountSecurity';
 import { authorizeEntitlement, parsePlans } from './entitlements';
-type Env=AccountEnv & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; PADDLE_LIVE_CLIENT_TOKEN?:string; };
+type Env=AccountEnv & BillingEnv & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; PADDLE_LIVE_CLIENT_TOKEN?:string; };
 const jsonHeaders={'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'};
 const knownPaths=['/','/checker','/pricing','/guides','/guides/pdf-accessibility-checker','/guides/accessible-lecture-notes','/guides/fix-inaccessible-pdfs','/guides/math-accessibility','/guides/academic-documents','/privacy','/terms','/refunds'];
 const navigationPaths=new Set(['/','/checker','/workspace','/account','/pricing','/guides','/privacy','/terms','/refunds']);
@@ -39,9 +40,12 @@ function secure(response:Response):Response {
 function reply(value:unknown,status=200):Response{return secure(new Response(JSON.stringify(value),{status,headers:jsonHeaders}));}
 function sitemap(host:string):string{return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+knownPaths.map(path=>'<url><loc>'+host+path+'</loc></url>').join('')+'</urlset>';}
 export default {
-  async fetch(request:Request,env:Env):Promise<Response>{
+  async scheduled(_controller:unknown,env:Env,ctx:BillingExecutionContext){ctx.waitUntil(retryPaddleInbox(env));},
+  async fetch(request:Request,env:Env,ctx?:BillingExecutionContext):Promise<Response>{
     const url=new URL(request.url);
     if(url.pathname==='/checkout'&&(request.method==='GET'||request.method==='HEAD'))return defaultPaymentPage(request,env.PADDLE_LIVE_CLIENT_TOKEN);
+    if(url.pathname==='/api/billing/webhook'&&request.method==='POST')return secure(await handleLiveWebhook(request,env,ctx));
+    if(url.pathname==='/api/billing/status'&&request.method==='GET')return secure(await handleBillingStatus(request,env));
     if(url.pathname==='/api/health'&&request.method==='GET')return reply({status:'ok',product:'CourseAccess',documentStorage:false});
     if(url.pathname.startsWith('/api/auth/')||url.pathname.startsWith('/api/organizations'))return secure(await handleAccountApi(request,env));
     if(url.pathname==='/api/plans'&&request.method==='GET')return reply({plans:parsePlans(env.COURSEACCESS_PLANS_JSON),billingEnabled:false});

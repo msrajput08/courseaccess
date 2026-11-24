@@ -114,6 +114,21 @@ jobs:
           PADDLE_LIVE_CLIENT_TOKEN: ${{ secrets.PADDLE_LIVE_CLIENT_TOKEN }}
         run: node scripts/prepare-production-accounts.mjs
 
+      - name: Bind Paddle signing and API secrets securely
+        if: steps.credentials.outputs.ready == 'true'
+        shell: bash
+        env:
+          PADDLE_LIVE_WEBHOOK_SECRET: ${{ secrets.PADDLE_LIVE_WEBHOOK_SECRET }}
+          PADDLE_LIVE_API_KEY: ${{ secrets.PADDLE_LIVE_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$PADDLE_LIVE_WEBHOOK_SECRET" || -z "$PADDLE_LIVE_API_KEY" ]]; then
+            echo "::error::Missing required Paddle server credentials."
+            exit 1
+          fi
+          umask 077
+          node -e 'require("node:fs").writeFileSync(process.env.RUNNER_TEMP+"/courseaccess-paddle-secrets.json",JSON.stringify({PADDLE_LIVE_WEBHOOK_SECRET:process.env.PADDLE_LIVE_WEBHOOK_SECRET,PADDLE_LIVE_API_KEY:process.env.PADDLE_LIVE_API_KEY}),{mode:0o600})'
+
       - name: Publish Worker and static assets
         if: steps.credentials.outputs.ready == 'true'
         id: publish
@@ -121,7 +136,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config .wrangler-courseaccess-active.jsonc
+          command: deploy --config .wrangler-courseaccess-active.jsonc --secrets-file ${{ runner.temp }}/courseaccess-paddle-secrets.json
 
       - name: Verify deployed HTML, assets, API and sitemap
         if: steps.credentials.outputs.ready == 'true'
@@ -160,6 +175,13 @@ jobs:
           COURSEACCESS_URL: ${{ steps.publish.outputs.deployment-url }}
         run: node scripts/verify-default-payment-link.mjs
 
+      - name: Verify live signed webhook receiver without a payment
+        if: steps.credentials.outputs.ready == 'true'
+        env:
+          COURSEACCESS_URL: ${{ steps.publish.outputs.deployment-url }}
+          PADDLE_LIVE_WEBHOOK_SECRET: ${{ secrets.PADDLE_LIVE_WEBHOOK_SECRET }}
+        run: node scripts/verify-live-webhook.mjs
+
       - name: Exercise the real deployed site on desktop and mobile
         if: steps.credentials.outputs.ready == 'true'
         env:
@@ -182,4 +204,4 @@ jobs:
 
       - name: Delete the ephemeral D1 binding config from the runner
         if: always()
-        run: rm -f .wrangler-courseaccess-active.jsonc
+        run: rm -f .wrangler-courseaccess-active.jsonc "$RUNNER_TEMP/courseaccess-paddle-secrets.json"

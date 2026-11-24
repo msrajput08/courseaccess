@@ -65,9 +65,15 @@ const required=[
   'accounts','passkey_credentials','sessions','auth_challenges',
   'organizations','organization_members','auth_rate_limits',
   'subscriptions','payment_event_receipts','d1_migrations',
-  'idx_organization_one_owner',
+  'idx_organization_one_owner','paddle_event_inbox','paddle_checkout_intents','paddle_subscription_holds','paddle_intent_owners','paid_review_history','guard_paddle_intent_owner','guard_paid_account_delete','guard_paid_org_delete','guard_paid_org_transfer',
 ];
 const missing=required.filter(x=>!names.has(x));
 if(missing.length)throw Error('Refusing account activation: remote schema incomplete: '+missing.join(', '));
+base.vars.COURSEACCESS_LIVE_WEBHOOK_INBOX_ENABLED='true';
+base.vars.COURSEACCESS_PADDLE_RECONCILE_ENABLED='true';
+base.vars.COURSEACCESS_LIVE_CHECKOUT_ENABLED='false';
+base.vars.COURSEACCESS_PAID_FEATURES_ENABLED='false';
+if(!names.has('paddle_customers')||!names.has('paddle_subscription_catalog'))console.log('Catalog migration 0007 pending; signed inbox retains failed reconciliation events for retry.');
+writeFileSync(tmp,JSON.stringify(base,null,2),{encoding:'utf8',mode:0o600});
 console.log('Verified production D1 binding, schema and approved origin.');
 console.log('Generated temporary release config; account activation requires successful deployment.');
