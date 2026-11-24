@@ -44,6 +44,11 @@ base.vars={
   COURSEACCESS_AUTH_ORIGIN:origin,
   COURSEACCESS_ACCOUNTS_ENABLED:'true',
 };
+// Paddle client-side tokens are public browser credentials, not API keys.
+// Keep the deployed token in the runtime config; never print it.
+const paddleToken=process.env.PADDLE_LIVE_CLIENT_TOKEN||'';
+if(!/^live_[A-Za-z0-9_]+$/.test(paddleToken))throw Error('Live Paddle client-side token missing or invalid.');
+base.vars.PADDLE_LIVE_CLIENT_TOKEN=paddleToken;
 writeFileSync(tmp,JSON.stringify(base,null,2),{encoding:'utf8',mode:0o600});
 
 let migrationResult;

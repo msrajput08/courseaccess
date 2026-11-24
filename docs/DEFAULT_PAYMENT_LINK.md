@@ -1,0 +1,3 @@
+# Dedicated default payment link release
+The approved public URL is https://courseaccess.minty-12-shar.workers.dev/checkout.
+This small release serves a dedicated server-rendered page and initializes live Paddle.js with the existing public client-side token. It supports Paddle-generated _ptxn links without creating an order on page load. New purchase initiation, paid entitlement changes, webhook reconciliation and paid-feature activation remain in draft PR #19 and are not deployed by this release. The production CI verifies the page and SDK in Chromium with no transaction. Once this check succeeds the owner can save the default URL in Paddle; actual payment acceptance requires separate fulfillment and lifecycle validation.
