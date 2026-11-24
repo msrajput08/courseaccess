@@ -31,7 +31,7 @@ export default function CheckoutPage(){
   </div>
   {config?<><div className="pricing-disclaimer"><button className="button button-primary" disabled={busy} onClick={()=>void run()}>Preview localized test prices</button></div>
     <div className="price-grid">{(['pro','institution'] as const).map(tier=><article key={tier} className="price-card"><h2>{tier==='pro'?'Professor Pro':'Institution'}</h2><p>{prices[tier]||'See test price at checkout'} / month</p><button className="button button-primary" disabled={busy} onClick={()=>void run(tier)}>Open test checkout</button></article>)}</div>
-    <p role="status" aria-live="polite">{status}</p></>:<div className="pricing-disclaimer"><a href="/pricing">View plans</a> · <a href="/checker">Continue with the free checker</a></div>}
+    <p role="status" aria-live="polite">{status}</p></>:<div className="pricing-disclaimer"><a href="/pricing">View plans</a> · <a href="/billing">Billing and subscription</a> · <a href="/checker">Continue with the free checker</a></div>}
   <p className="lead"><a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds and cancellation</a></p>
   </main>;
 }

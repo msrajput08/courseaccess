@@ -2,10 +2,11 @@ import {handleAccountApi} from './accountApi';
 import type {AccountEnv} from './accountSecurity';
 import { authorizeEntitlement, parsePlans } from './entitlements';
 import {verifyPaddleWebhook} from './paddleWebhook';
-type Env=AccountEnv & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; PADDLE_SANDBOX_WEBHOOK_SECRET?:string; COURSEACCESS_SANDBOX_WEBHOOK_ORIGIN?:string; };
+import {handleBillingStatus,handleLiveWebhook,type BillingEnv} from './billingApi';
+type Env=AccountEnv & BillingEnv & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; PADDLE_SANDBOX_WEBHOOK_SECRET?:string; COURSEACCESS_SANDBOX_WEBHOOK_ORIGIN?:string; };
 const jsonHeaders={'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'};
 const knownPaths=['/','/checker','/pricing','/guides','/guides/pdf-accessibility-checker','/guides/accessible-lecture-notes','/guides/fix-inaccessible-pdfs','/guides/math-accessibility','/guides/academic-documents','/privacy','/terms','/refunds'];
-const navigationPaths=new Set(['/','/checker','/workspace','/account','/pricing','/checkout','/guides','/privacy','/terms','/refunds']);
+const navigationPaths=new Set(['/','/checker','/workspace','/account','/pricing','/checkout','/billing','/guides','/privacy','/terms','/refunds']);
 function isAppNavigation(pathname:string):boolean {
   return navigationPaths.has(pathname)||pathname.startsWith('/guides/');
 }
@@ -45,6 +46,8 @@ export default {
     if(url.pathname.startsWith('/api/auth/')||url.pathname.startsWith('/api/organizations'))return secure(await handleAccountApi(request,env));
     if(url.pathname==='/api/plans'&&request.method==='GET')return reply({plans:parsePlans(env.COURSEACCESS_PLANS_JSON),billingEnabled:false});
     if(url.pathname==='/api/entitlements'&&request.method==='GET')return reply({authenticated:false,paidFeaturesEnabled:false,features:{'pdf-inspection':authorizeEntitlement('pdf-inspection',null),'semantic-html':authorizeEntitlement('semantic-html',null),'advanced-remediation':false,'history-cloud':false,'team-workspace':false}});
+    if(url.pathname==='/api/billing/status'&&request.method==='GET')return secure(await handleBillingStatus(request,env));
+    if(url.pathname==='/api/billing/webhook'&&request.method==='POST')return secure(await handleLiveWebhook(request,env));
     if(url.pathname==='/api/billing/sandbox-webhook'&&request.method==='POST'){
       // Verification-only test receiver, explicitly restricted to a separate origin.
       // Never acknowledge production events or activate subscriptions here.
