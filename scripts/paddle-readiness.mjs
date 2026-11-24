@@ -49,12 +49,14 @@ async function audit(name,base,key,token){
      console.log(name+' expected checkout domain present: '+Boolean(match)+'; approval status: '+status);
    }
    if(path==='/settings/checkout-url'){
-     if(!data.default_url)console.log(name+' default payment link: unset');
-     else {let matches=false;try{matches=new URL(data.default_url).hostname==='courseaccess.minty-12-shar.workers.dev';}catch{}console.log(name+' default payment link: configured; matches expected hostname: '+matches);}
+     if(!data.default_url){console.log(name+' default payment link: unset');if(live)blocked=true;}
+     else {let matches=false;try{matches=new URL(data.default_url).href==='https://courseaccess.minty-12-shar.workers.dev/checkout';}catch{}console.log(name+' default payment link: configured; matches exact checkout URL: '+matches);if(live&&!matches)blocked=true;}
    }
  }
 }
 await audit('live','https://api.paddle.com',process.env.PADDLE_LIVE_API_KEY||'',process.env.PADDLE_LIVE_CLIENT_TOKEN||'');
-await audit('sandbox','https://sandbox-api.paddle.com',process.env.PADDLE_SANDBOX_API_KEY||'',process.env.PADDLE_SANDBOX_CLIENT_TOKEN||'');
+// CourseAccess uses a live account. Optional sandbox credentials are not a live preflight blocker.
+if(process.env.PADDLE_SANDBOX_API_KEY&&process.env.PADDLE_SANDBOX_CLIENT_TOKEN)await audit('sandbox','https://sandbox-api.paddle.com',process.env.PADDLE_SANDBOX_API_KEY,process.env.PADDLE_SANDBOX_CLIENT_TOKEN);
+else console.log('Sandbox account audit skipped (not configured). No transaction was created.');
 console.log('Read-only preflight, not migration. No payments, verification, or account modifications.');
 if(blocked){console.log('Preflight incomplete: missing credentials, permissions or catalog mismatch.');process.exitCode=1;}

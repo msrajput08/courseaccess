@@ -3,7 +3,7 @@ import type {AccountEnv} from './accountSecurity';
 import { parsePlans } from './entitlements';
 import {handleEntitlements,handlePaidReviewHistory} from './paidAccess';
 import {verifyPaddleWebhook} from './paddleWebhook';
-import {handleBillingStatus,handleLiveWebhook,type BillingEnv} from './billingApi';
+import {handleBillingStatus,handleLiveWebhook,retryPaddleInbox,type BillingExecutionContext,type BillingEnv} from './billingApi';
 import {checkoutConfig,createCheckoutIntent,type LiveCheckoutEnv} from './liveCheckout';
 type Env=AccountEnv & BillingEnv & LiveCheckoutEnv & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; PADDLE_SANDBOX_WEBHOOK_SECRET?:string; COURSEACCESS_SANDBOX_WEBHOOK_ORIGIN?:string; };
 const jsonHeaders={'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'};
@@ -47,7 +47,8 @@ function secure(response:Response,checkout=false):Response {
 function reply(value:unknown,status=200):Response{return secure(new Response(JSON.stringify(value),{status,headers:jsonHeaders}));}
 function sitemap(host:string):string{return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+knownPaths.map(path=>'<url><loc>'+host+path+'</loc></url>').join('')+'</urlset>';}
 export default {
-  async fetch(request:Request,env:Env):Promise<Response>{
+  async scheduled(_controller:unknown,env:Env,ctx:BillingExecutionContext){ctx.waitUntil(retryPaddleInbox(env));},
+  async fetch(request:Request,env:Env,ctx?:BillingExecutionContext):Promise<Response>{
     const url=new URL(request.url);
     if(url.pathname==='/api/health'&&request.method==='GET')return reply({status:'ok',product:'CourseAccess',documentStorage:false});
     if(url.pathname.startsWith('/api/auth/')||url.pathname.startsWith('/api/organizations'))return secure(await handleAccountApi(request,env));
@@ -57,7 +58,7 @@ export default {
     if(url.pathname==='/api/billing/checkout-config'&&request.method==='GET')return secure(await checkoutConfig(request,env));
     if(url.pathname==='/api/billing/checkout-intent'&&request.method==='POST')return secure(await createCheckoutIntent(request,env));
     if(url.pathname==='/api/billing/status'&&request.method==='GET')return secure(await handleBillingStatus(request,env));
-    if(url.pathname==='/api/billing/webhook'&&request.method==='POST')return secure(await handleLiveWebhook(request,env));
+    if(url.pathname==='/api/billing/webhook'&&request.method==='POST')return secure(await handleLiveWebhook(request,env,ctx));
     if(url.pathname==='/api/billing/sandbox-webhook'&&request.method==='POST'){
       // Verification-only test receiver, explicitly restricted to a separate origin.
       // Never acknowledge production events or activate subscriptions here.

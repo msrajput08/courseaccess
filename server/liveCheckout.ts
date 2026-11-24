@@ -65,7 +65,14 @@ export async function createCheckoutIntent(req:Request,env:LiveCheckoutEnv):Prom
       ]);
     }catch{
       const previous=await db.prepare("SELECT i.transaction_id,i.tier,i.state FROM paddle_checkout_intents i JOIN paddle_intent_owners o ON o.intent_id=i.id WHERE i.account_id=? AND o.owner_kind=? AND o.owner_id=? AND i.state IN ('creating','ready','review') LIMIT 1").bind(accountId,kind,subject).first<{transaction_id:string|null;tier:string;state:string}>();
-      if(previous?.state==='ready'&&previous.tier===body.tier&&transactionId(previous.transaction_id))return responseJSON({transactionId:previous.transaction_id});
+      if(previous?.state==='ready'&&previous.tier===body.tier&&transactionId(previous.transaction_id)){
+        const tx=await paddleData(env,'/transactions/'+previous.transaction_id);
+        if(tx.id===previous.transaction_id&&['draft','ready','past_due'].includes(String(tx.status)))return responseJSON({transactionId:previous.transaction_id});
+        if(tx.id===previous.transaction_id&&tx.status==='canceled'){
+          await db.prepare("UPDATE paddle_checkout_intents SET state='canceled' WHERE transaction_id=? AND state='ready'").bind(previous.transaction_id).run();
+          return responseJSON({error:'Previous checkout was canceled. Start a new checkout.'},409);
+        }
+      }
       return responseJSON({error:'An existing checkout requires reconciliation.'},409);
     }
     try{

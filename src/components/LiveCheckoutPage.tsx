@@ -43,7 +43,7 @@ export default function LiveCheckoutPage(){
     try{
       const r=await fetch('/api/billing/checkout-intent',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({tier,...(tier==='institution'?{organizationId}:{})})});
       if(r.status===401){setStatus('Please sign in to your CourseAccess account first.');return;}
-      if(!r.ok)throw Error();
+      if(!r.ok){const problem=await r.json().catch(()=>null);setStatus(typeof problem?.error==='string'?problem.error:'Checkout unavailable.');return;}
       const data=await r.json() as {transactionId?:string};
       if(!data.transactionId||!/^txn_[a-z0-9]{26}$/.test(data.transactionId))throw Error();
       const client=await initialize(config.clientToken,()=>undefined);

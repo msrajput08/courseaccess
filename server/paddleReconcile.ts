@@ -52,6 +52,14 @@ export async function reconcilePaddleEvent(env:BillingEnv,event:VerifiedPaddleEv
     if(!matchesInitialTransaction(tx,event.data.id,initial.tier))throw Error('Transaction reconciliation required');
     intentId=initial.id;subId=tx.subscription_id;
     owner={owner_kind:initial.owner_kind,owner_id:initial.owner_id,tier:initial.tier,transaction_id:initial.transaction_id,provider_customer_ref:String(tx.customer_id),provider_subscription_ref:String(subId)};
+  }else if(event.eventType==='transaction.canceled'&&transactionId(event.data.id)){
+    const tx=await paddleData(env,'/transactions/'+event.data.id);
+    if(tx.id!==event.data.id||tx.status!=='canceled')throw Error('Transaction cancellation unverified');
+    await db.batch([
+      db.prepare("UPDATE paddle_checkout_intents SET state='canceled' WHERE transaction_id=? AND state IN ('ready','review')").bind(event.data.id),
+      db.prepare("UPDATE payment_event_receipts SET applied_at_ms=? WHERE provider='paddle' AND provider_event_id=?").bind(Date.now(),event.eventId)
+    ]);
+    return true;
   }else if(event.eventType.startsWith('subscription.')&&providerId(event.data.id,'sub')){
     subId=event.data.id;
     const existing=await db.prepare("SELECT owner_kind,owner_id,tier,provider_customer_ref,provider_subscription_ref FROM subscriptions WHERE provider='paddle' AND provider_subscription_ref=?").bind(subId).first<Owner>();

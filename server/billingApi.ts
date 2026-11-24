@@ -1,6 +1,7 @@
 import {activeAccountService,getCookie,sessionCookie,sha256,responseJSON,type AccountEnv} from './accountSecurity';
 import {verifyPaddleWebhook,type VerifiedPaddleEvent} from './paddleWebhook';
 import {reconcilePaddleEvent} from './paddleReconcile';
+export interface BillingExecutionContext {waitUntil(promise:Promise<unknown>):void}
 export interface BillingEnv extends AccountEnv {
   PADDLE_LIVE_WEBHOOK_SECRET?:string;
   COURSEACCESS_LIVE_WEBHOOK_INBOX_ENABLED?:string;
@@ -34,7 +35,7 @@ export function inboxEvent(event:VerifiedPaddleEvent){
   if(!relevant||typeof objectId!=='string'||!/^(sub|txn|adj)_[a-z0-9]{26}$/.test(objectId))return null;
   return {id:event.eventId,type:event.eventType,occurred:Date.parse(event.occurredAt),objectId};
 }
-export async function handleLiveWebhook(request:Request,env:BillingEnv):Promise<Response>{
+export async function handleLiveWebhook(request:Request,env:BillingEnv,ctx?:BillingExecutionContext):Promise<Response>{
   if(!inboxEnabled(request,env))return responseJSON({error:'Live webhook inbox disabled.'},503);
   let event:VerifiedPaddleEvent;
   try{event=await verifyPaddleWebhook(request,env.PADDLE_LIVE_WEBHOOK_SECRET!);}
@@ -50,9 +51,21 @@ export async function handleLiveWebhook(request:Request,env:BillingEnv):Promise<
     // The eventual reconciliation consumer must fetch canonical provider state
     // and atomically apply entitlement changes before setting applied_at_ms.
     if(env.COURSEACCESS_PADDLE_RECONCILE_ENABLED==='true'){
+      if(ctx){
+        ctx.waitUntil(reconcilePaddleEvent(env,event).catch(()=>undefined));
+        return responseJSON({received:true,queued:true,applied:false});
+      }
       const applied=await reconcilePaddleEvent(env,event);
       return responseJSON({received:true,applied});
     }
     return responseJSON({received:true,applied:false});
   }catch{return responseJSON({error:'Webhook persistence unavailable; retry required.'},503);}
+}
+
+// Scheduled retries use the authenticated event references already persisted in D1.
+// No raw personal payload is needed; the reconciler fetches current Paddle state.
+export async function retryPaddleInbox(env:BillingEnv):Promise<void>{
+ if(env.COURSEACCESS_PADDLE_RECONCILE_ENABLED!=='true'||env.COURSEACCESS_LIVE_WEBHOOK_INBOX_ENABLED!=='true'||!env.DB||!env.PADDLE_LIVE_API_KEY)return;
+ const pending=await env.DB.prepare("SELECT i.event_id,i.event_type,i.occurred_at_ms,i.object_id FROM paddle_event_inbox i JOIN payment_event_receipts r ON r.provider='paddle' AND r.provider_event_id=i.event_id WHERE r.applied_at_ms IS NULL ORDER BY i.received_at_ms LIMIT 12").all<{event_id:string;event_type:string;occurred_at_ms:number;object_id:string}>();
+ await Promise.allSettled(pending.results.map(row=>reconcilePaddleEvent(env,{eventId:row.event_id,eventType:row.event_type,occurredAt:new Date(row.occurred_at_ms).toISOString(),data:{id:row.object_id}})));
 }
