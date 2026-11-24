@@ -1,7 +1,11 @@
 import {useState} from 'react';
+import LiveCheckoutPage from './LiveCheckoutPage';
 import {sandboxConfig,loadSandbox,sandboxItems,sandboxLocalizedPrices,type SandboxTier} from '../lib/paddleSandbox';
 export default function CheckoutPage(){
   const config=sandboxConfig(import.meta.env.DEV,location.hostname,import.meta.env.VITE_PADDLE_SANDBOX_CLIENT_TOKEN,import.meta.env.VITE_PADDLE_SANDBOX_PRO_PRICE_ID,import.meta.env.VITE_PADDLE_SANDBOX_INSTITUTION_PRICE_ID);
+  return config?<SandboxCheckout config={config}/>:<LiveCheckoutPage/>;
+}
+function SandboxCheckout({config}:{config:NonNullable<ReturnType<typeof sandboxConfig>>}){
   const [status,setStatus]=useState('');
   const [busy,setBusy]=useState(false);
   const [prices,setPrices]=useState<Partial<Record<SandboxTier,string>>>({});

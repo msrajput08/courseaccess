@@ -3,7 +3,8 @@ import type {AccountEnv} from './accountSecurity';
 import { authorizeEntitlement, parsePlans } from './entitlements';
 import {verifyPaddleWebhook} from './paddleWebhook';
 import {handleBillingStatus,handleLiveWebhook,type BillingEnv} from './billingApi';
-type Env=AccountEnv & BillingEnv & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; PADDLE_SANDBOX_WEBHOOK_SECRET?:string; COURSEACCESS_SANDBOX_WEBHOOK_ORIGIN?:string; };
+import {checkoutConfig,createCheckoutIntent,type LiveCheckoutEnv} from './liveCheckout';
+type Env=AccountEnv & BillingEnv & LiveCheckoutEnv & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; PADDLE_SANDBOX_WEBHOOK_SECRET?:string; COURSEACCESS_SANDBOX_WEBHOOK_ORIGIN?:string; };
 const jsonHeaders={'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'};
 const knownPaths=['/','/checker','/pricing','/guides','/guides/pdf-accessibility-checker','/guides/accessible-lecture-notes','/guides/fix-inaccessible-pdfs','/guides/math-accessibility','/guides/academic-documents','/privacy','/terms','/refunds'];
 const navigationPaths=new Set(['/','/checker','/workspace','/account','/pricing','/checkout','/billing','/guides','/privacy','/terms','/refunds']);
@@ -32,9 +33,14 @@ const securityHeaders={
   'cross-origin-resource-policy':'same-origin',
   'permissions-policy':'camera=(), microphone=(), geolocation=(), payment=()',
 };
-function secure(response:Response):Response {
+function secure(response:Response,checkout=false):Response {
   const headers=new Headers(response.headers);
   for(const [name,value] of Object.entries(securityHeaders))headers.set(name,value);
+  if(checkout){
+    // Restrict the expanded policy to the dedicated billing document.
+    headers.set('content-security-policy',contentSecurityPolicy.replace("script-src 'self' 'wasm-unsafe-eval'","script-src 'self' 'wasm-unsafe-eval' https://cdn.paddle.com").replace("connect-src 'self'","connect-src 'self' https://*.paddle.com").replace("img-src 'self' data: blob:","img-src 'self' data: blob: https://*.paddle.com")+"; frame-src https://*.paddle.com");
+    headers.set('permissions-policy','camera=(), microphone=(), geolocation=(), payment=(self "https://checkout.paddle.com")');
+  }
   return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
 }
 function reply(value:unknown,status=200):Response{return secure(new Response(JSON.stringify(value),{status,headers:jsonHeaders}));}
@@ -46,6 +52,8 @@ export default {
     if(url.pathname.startsWith('/api/auth/')||url.pathname.startsWith('/api/organizations'))return secure(await handleAccountApi(request,env));
     if(url.pathname==='/api/plans'&&request.method==='GET')return reply({plans:parsePlans(env.COURSEACCESS_PLANS_JSON),billingEnabled:false});
     if(url.pathname==='/api/entitlements'&&request.method==='GET')return reply({authenticated:false,paidFeaturesEnabled:false,features:{'pdf-inspection':authorizeEntitlement('pdf-inspection',null),'semantic-html':authorizeEntitlement('semantic-html',null),'advanced-remediation':false,'history-cloud':false,'team-workspace':false}});
+    if(url.pathname==='/api/billing/checkout-config'&&request.method==='GET')return secure(await checkoutConfig(request,env));
+    if(url.pathname==='/api/billing/checkout-intent'&&request.method==='POST')return secure(await createCheckoutIntent(request,env));
     if(url.pathname==='/api/billing/status'&&request.method==='GET')return secure(await handleBillingStatus(request,env));
     if(url.pathname==='/api/billing/webhook'&&request.method==='POST')return secure(await handleLiveWebhook(request,env));
     if(url.pathname==='/api/billing/sandbox-webhook'&&request.method==='POST'){
@@ -75,7 +83,7 @@ export default {
       headers.set('cache-control','no-store, no-cache, must-revalidate');
       headers.set('pragma','no-cache');
       headers.set('x-content-type-options','nosniff');
-      return secure(new Response(request.method==='HEAD'?null:shell.body,{status:shell.status,headers}));
+      return secure(new Response(request.method==='HEAD'?null:shell.body,{status:shell.status,headers}),url.pathname==='/checkout');
     }
     return secure(await env.ASSETS.fetch(request));
   },

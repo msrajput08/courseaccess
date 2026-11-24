@@ -126,14 +126,16 @@ jobs:
         shell: bash
         env:
           PADDLE_LIVE_WEBHOOK_SECRET: ${{ secrets.PADDLE_LIVE_WEBHOOK_SECRET }}
+          PADDLE_LIVE_API_KEY: ${{ secrets.PADDLE_LIVE_API_KEY }}
+          PADDLE_LIVE_CLIENT_TOKEN: ${{ secrets.PADDLE_LIVE_CLIENT_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ -z "$PADDLE_LIVE_WEBHOOK_SECRET" ]]; then
-            echo "::error::PADDLE_LIVE_WEBHOOK_SECRET is missing."
+          if [[ -z "$PADDLE_LIVE_WEBHOOK_SECRET" || -z "$PADDLE_LIVE_API_KEY" || -z "$PADDLE_LIVE_CLIENT_TOKEN" ]]; then
+            echo "::error::One or more required Paddle live credentials are missing."
             exit 1
           fi
           umask 077
-          node -e 'const fs=require("node:fs"); fs.writeFileSync(process.env.RUNNER_TEMP+"/courseaccess-paddle-secrets.json",JSON.stringify({PADDLE_LIVE_WEBHOOK_SECRET:process.env.PADDLE_LIVE_WEBHOOK_SECRET}),{mode:0o600})'
+          node -e 'const fs=require("node:fs"); fs.writeFileSync(process.env.RUNNER_TEMP+"/courseaccess-paddle-secrets.json",JSON.stringify({PADDLE_LIVE_WEBHOOK_SECRET:process.env.PADDLE_LIVE_WEBHOOK_SECRET,PADDLE_LIVE_API_KEY:process.env.PADDLE_LIVE_API_KEY,PADDLE_LIVE_CLIENT_TOKEN:process.env.PADDLE_LIVE_CLIENT_TOKEN}),{mode:0o600})'
           echo "args=--secrets-file $RUNNER_TEMP/courseaccess-paddle-secrets.json" >> "$GITHUB_OUTPUT"
           echo "Paddle signing secret prepared for the authorized Worker release (billing remains disabled)." >> "$GITHUB_STEP_SUMMARY"
 
