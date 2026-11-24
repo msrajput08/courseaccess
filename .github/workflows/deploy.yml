@@ -207,6 +207,12 @@ jobs:
           COURSEACCESS_URL: ${{ steps.publish.outputs.deployment-url }}
         run: node scripts/verify-commercial-live.mjs
 
+      - name: Verify live consent and analytics isolation (no real Google events)
+        if: steps.credentials.outputs.ready == 'true'
+        env:
+          COURSEACCESS_URL: ${{ steps.publish.outputs.deployment-url }}
+        run: node scripts/verify-analytics-live.mjs
+
       - name: Exercise the real deployed site on desktop and mobile
         if: steps.credentials.outputs.ready == 'true'
         env:

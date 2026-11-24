@@ -1,0 +1,25 @@
+import {useEffect,useState} from 'react';
+import {ANALYTICS_ORIGIN,isMarketingPath,CONSENT_KEY,type AnalyticsConsent} from '../lib/analyticsPolicy';
+import {getAnalyticsConsent,saveAnalyticsConsent,startAnalytics,stopAnalytics,analyticsLoaded} from '../lib/analytics';
+export default function AnalyticsPreferences(){
+ const production=location.origin===ANALYTICS_ORIGIN;
+ const [choice,setChoice]=useState<AnalyticsConsent>(getAnalyticsConsent),[expanded,setExpanded]=useState(false),[error,setError]=useState('');
+ const marketing=isMarketingPath(location.pathname);
+ useEffect(()=>{
+  if(!production)return;
+  function sync(){const current=getAnalyticsConsent();setChoice(current);if(current==='granted')startAnalytics();else if(analyticsLoaded())stopAnalytics();}
+  const onStorage=(event:StorageEvent)=>{if(event.key===CONSENT_KEY||event.key===null)sync();};
+  sync();addEventListener('storage',onStorage);addEventListener('pageshow',sync);
+  return()=>{removeEventListener('storage',onStorage);removeEventListener('pageshow',sync);};
+ },[production]);
+ if(!production)return null;
+ function choose(next:'granted'|'denied'){
+  if(!saveAnalyticsConsent(next)){setError('Your browser could not save this preference.');if(next==='denied'&&analyticsLoaded()){try{localStorage.removeItem(CONSENT_KEY);}catch{}stopAnalytics();}return;}
+  setChoice(next);setExpanded(false);setError('');
+  if(next==='granted')startAnalytics();else stopAnalytics();
+ }
+ return <section className="analytics-preferences" aria-label="Analytics preferences"><div className="shell analytics-preferences-inner">
+ {(marketing&&choice===null)||expanded?<><div><h2>Optional website analytics</h2><p>Help us understand visits to our public pages with Google Analytics via Tag Manager. No analytics tags are loaded on document tools, account or checkout pages. You can change your choice anytime. <a href="/privacy">Privacy policy</a>.</p></div><div className="analytics-actions"><button type="button" className="button button-secondary" onClick={()=>choose('denied')}>Reject optional analytics</button><button type="button" className="button button-secondary" onClick={()=>choose('granted')}>Allow optional analytics</button>{expanded&&<button type="button" className="button button-quiet" onClick={()=>setExpanded(false)}>Close preferences</button>}</div></>:<button type="button" className="analytics-settings" onClick={()=>setExpanded(true)}>Analytics preferences {choice?'('+ (choice==='granted'?'allowed':'off') +')':''}</button>}
+ {error&&<p role="alert">{error}</p>}
+ </div></section>;
+}
