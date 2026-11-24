@@ -2,7 +2,7 @@ name: Paddle pricing preparation checks (no payment)
 on:
   push:
     branches: [billing/paddle-readiness]
-    paths: ["src/lib/paddleLive.ts","src/lib/usePaddlePricePreview.ts","src/App.tsx","tests/paddle-live.test.ts",".github/workflows/paddle-pricing-checks.yml"]
+    paths: ["src/**","server/**","tests/**",".github/workflows/paddle-pricing-checks.yml"]
   workflow_dispatch:
 permissions:
   contents: read

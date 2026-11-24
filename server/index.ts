@@ -1,10 +1,11 @@
 import {handleAccountApi} from './accountApi';
 import type {AccountEnv} from './accountSecurity';
 import { authorizeEntitlement, parsePlans } from './entitlements';
-type Env=AccountEnv & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; };
+import {verifyPaddleWebhook} from './paddleWebhook';
+type Env=AccountEnv & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; PADDLE_SANDBOX_WEBHOOK_SECRET?:string; COURSEACCESS_SANDBOX_WEBHOOK_ORIGIN?:string; };
 const jsonHeaders={'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'};
 const knownPaths=['/','/checker','/pricing','/guides','/guides/pdf-accessibility-checker','/guides/accessible-lecture-notes','/guides/fix-inaccessible-pdfs','/guides/math-accessibility','/guides/academic-documents','/privacy','/terms','/refunds'];
-const navigationPaths=new Set(['/','/checker','/workspace','/account','/pricing','/guides','/privacy','/terms','/refunds']);
+const navigationPaths=new Set(['/','/checker','/workspace','/account','/pricing','/checkout','/guides','/privacy','/terms','/refunds']);
 function isAppNavigation(pathname:string):boolean {
   return navigationPaths.has(pathname)||pathname.startsWith('/guides/');
 }
@@ -44,6 +45,17 @@ export default {
     if(url.pathname.startsWith('/api/auth/')||url.pathname.startsWith('/api/organizations'))return secure(await handleAccountApi(request,env));
     if(url.pathname==='/api/plans'&&request.method==='GET')return reply({plans:parsePlans(env.COURSEACCESS_PLANS_JSON),billingEnabled:false});
     if(url.pathname==='/api/entitlements'&&request.method==='GET')return reply({authenticated:false,paidFeaturesEnabled:false,features:{'pdf-inspection':authorizeEntitlement('pdf-inspection',null),'semantic-html':authorizeEntitlement('semantic-html',null),'advanced-remediation':false,'history-cloud':false,'team-workspace':false}});
+    if(url.pathname==='/api/billing/sandbox-webhook'&&request.method==='POST'){
+      // Verification-only test receiver, explicitly restricted to a separate origin.
+      // Never acknowledge production events or activate subscriptions here.
+      const staging=env.COURSEACCESS_SANDBOX_WEBHOOK_ORIGIN;
+      const production='https://courseaccess.minty-12-shar.workers.dev';
+      if(!staging||staging!==url.origin||staging===production||staging===env.COURSEACCESS_AUTH_ORIGIN||!env.PADDLE_SANDBOX_WEBHOOK_SECRET)return reply({error:'Sandbox receiver disabled.'},503);
+      try{
+        const event=await verifyPaddleWebhook(request,env.PADDLE_SANDBOX_WEBHOOK_SECRET);
+        return reply({verified:true,eventType:event.eventType,applied:false});
+      }catch{return reply({error:'Invalid webhook.'},400);}
+    }
     if(url.pathname.startsWith('/api/'))return reply({error:'Not available. Authentication and billing are not configured.'},request.method==='GET'?404:403);
     if(request.method==='GET'&&url.pathname==='/sitemap.xml')return secure(new Response(sitemap(url.origin),{headers:{'content-type':'application/xml; charset=utf-8','cache-control':'public, max-age=3600'}}));
     if(request.method==='GET'&&url.pathname==='/robots.txt')return secure(new Response('User-agent: *\nAllow: /\nSitemap: '+url.origin+'/sitemap.xml\n',{headers:{'content-type':'text/plain; charset=utf-8','cache-control':'public, max-age=3600'}}));
