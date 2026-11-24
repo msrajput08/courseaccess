@@ -22,7 +22,8 @@ export async function handleBillingStatus(request:Request,env:BillingEnv):Promis
     const id=await env.DB.prepare('SELECT s.account_id FROM sessions s JOIN accounts a ON a.id=s.account_id WHERE s.token_hash=? AND s.revoked_at_ms IS NULL AND s.expires_at_ms>? AND a.deleted_at_ms IS NULL').bind(await sha256(cookie),Date.now()).first<{account_id:string}>();
     if(!id)return responseJSON(empty);
     const sub=await env.DB.prepare("SELECT tier,status,period_end_ms FROM subscriptions WHERE owner_kind='account' AND owner_id=? AND provider='paddle' AND verified_at_ms IS NOT NULL ORDER BY verified_at_ms DESC LIMIT 1").bind(id.account_id).first<{tier:string;status:string;period_end_ms:number|null}>();
-    return responseJSON({authenticated:true,billingEnabled:false,subscription:sub?{tier:sub.tier,status:sub.status,periodEnd:sub.period_end_ms}:null});
+    const institutions=await env.DB.prepare("SELECT o.id AS organizationId,o.display_name AS name,s.status,s.period_end_ms AS periodEnd FROM organization_members m JOIN organizations o ON o.id=m.organization_id JOIN subscriptions s ON s.owner_kind='organization' AND s.owner_id=o.id WHERE m.account_id=? AND m.role='owner' AND s.provider='paddle' AND s.verified_at_ms IS NOT NULL ORDER BY s.verified_at_ms DESC").bind(id.account_id).all();
+    return responseJSON({authenticated:true,billingEnabled:false,subscription:sub?{tier:sub.tier,status:sub.status,periodEnd:sub.period_end_ms}:null,institutions:institutions.results});
   }catch{return responseJSON({error:'Billing information unavailable.'},503);}
 }
 export function inboxEvent(event:VerifiedPaddleEvent){
