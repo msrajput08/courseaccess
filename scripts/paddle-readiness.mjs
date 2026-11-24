@@ -26,7 +26,32 @@ async function audit(name,base,key,token){
  }
  for(const path of ['/products','/prices','/discounts','/client-tokens','/notification-settings','/settings/checkout-payment-methods','/settings/tax','/settings/balance-currency','/settings/checkout-url','/checkout-domains']){
    const data=await get(path);
-   if(data!==null)console.log(name+' '+path+': readable'+(Array.isArray(data)?'; first-page entries: '+data.length:''));
+   if(data===null)continue;
+   console.log(name+' '+path+': readable'+(Array.isArray(data)?'; first-page entries: '+data.length:''));
+   if(path==='/client-tokens'&&Array.isArray(data)){
+     const match=data.find(t=>t.token===token);
+     console.log(name+' exact saved client token present: '+Boolean(match)+'; status: '+(match?.status==='active'?'active':match?.status==='revoked'?'revoked':'unknown'));
+     if(!match||match.status!=='active')blocked=true;
+   }
+   if(path==='/settings/checkout-payment-methods'){
+     for(const [method,value] of Object.entries(data.payment_methods||{})){
+       if(/^[a-z0-9_]+$/.test(method))console.log(name+' payment method '+method+': enabled='+String(value.enabled===true)+' available='+String(value.available===true));
+     }
+   }
+   if(path==='/settings/tax')console.log(name+' default tax mode: '+(['internal','external','location','account_setting','inclusive','exclusive'].includes(data.default_tax_mode)?data.default_tax_mode:'unknown'));
+   if(path==='/settings/balance-currency'){
+     const currency=x=>typeof x==='string'&&/^[A-Z]{3}$/.test(x)?x:'unknown';
+     console.log(name+' balance currency primary: '+currency(data.primary)+'; preferred: '+currency(data.preferred));
+   }
+   if(path==='/checkout-domains'&&Array.isArray(data)){
+     const match=data.find(d=>d.domain==='courseaccess.minty-12-shar.workers.dev');
+     const status=['approved','pending','rejected','action_required','in_review','submitted','unapproved'].includes(match?.status)?match.status:'unknown';
+     console.log(name+' expected checkout domain present: '+Boolean(match)+'; approval status: '+status);
+   }
+   if(path==='/settings/checkout-url'){
+     if(!data.default_url)console.log(name+' default payment link: unset');
+     else {let matches=false;try{matches=new URL(data.default_url).hostname==='courseaccess.minty-12-shar.workers.dev';}catch{}console.log(name+' default payment link: configured; matches expected hostname: '+matches);}
+   }
  }
 }
 await audit('live','https://api.paddle.com',process.env.PADDLE_LIVE_API_KEY||'',process.env.PADDLE_LIVE_CLIENT_TOKEN||'');
