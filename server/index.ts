@@ -1,4 +1,5 @@
 import {canLoadAnalytics,ANALYTICS_ORIGIN} from '../src/lib/analyticsPolicy';
+import {recordNavigation,type TrafficDataset} from './trafficAnalytics';
 import {publicOffers} from './launchOffers';
 import {handleAccountApi} from './accountApi';
 import {defaultPaymentPage} from './defaultPaymentPage';
@@ -10,7 +11,7 @@ import type {AccountEnv} from './accountSecurity';
 import {parsePlans} from './entitlements';
 import {handleEntitlements,handlePaidReviewHistory} from './paidAccess';
 import {checkoutConfig,createCheckoutIntent,checkoutEnabled} from './liveCheckout';
-type Env=AccountEnv & BillingEnv & {COURSEACCESS_LIVE_CHECKOUT_ENABLED?:string;COURSEACCESS_LIVE_PRICE_PREVIEW_ENABLED?:string;COURSEACCESS_LAUNCH_OFFERS?:string} & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; PADDLE_LIVE_CLIENT_TOKEN?:string; };
+type Env=AccountEnv & BillingEnv & {COURSEACCESS_LIVE_CHECKOUT_ENABLED?:string;COURSEACCESS_LIVE_PRICE_PREVIEW_ENABLED?:string;COURSEACCESS_LAUNCH_OFFERS?:string; TRAFFIC_ANALYTICS?:TrafficDataset} & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; PADDLE_LIVE_CLIENT_TOKEN?:string; };
 const jsonHeaders={'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'};
 const knownPaths=['/','/checker','/pricing','/guides','/guides/pdf-accessibility-checker','/guides/accessible-lecture-notes','/guides/fix-inaccessible-pdfs','/guides/math-accessibility','/guides/academic-documents','/privacy','/terms','/refunds'];
 const navigationPaths=new Set(['/','/checker','/workspace','/account','/pricing','/guides','/privacy','/terms','/refunds']);
@@ -55,7 +56,7 @@ export default {
   async scheduled(_controller:unknown,env:Env,ctx:BillingExecutionContext){ctx.waitUntil(retryPaddleInbox(env));},
   async fetch(request:Request,env:Env,ctx?:BillingExecutionContext):Promise<Response>{
     const url=new URL(request.url);
-    if(url.pathname==='/checkout'&&(request.method==='GET'||request.method==='HEAD'))return defaultPaymentPage(request,env.PADDLE_LIVE_CLIENT_TOKEN,checkoutEnabled(request,env));
+    if(url.pathname==='/checkout'&&(request.method==='GET'||request.method==='HEAD')){const response=defaultPaymentPage(request,env.PADDLE_LIVE_CLIENT_TOKEN,checkoutEnabled(request,env));recordNavigation(request,env.TRAFFIC_ANALYTICS,response.status);return response;}
     if(url.pathname==='/api/billing/webhook'&&request.method==='POST')return secure(await handleLiveWebhook(request,env,ctx));
     if(url.pathname==='/api/billing/portal'&&request.method==='POST')return secure(await handleBillingPortal(request,env));
     if(url.pathname==='/api/billing/scope'&&request.method==='POST')return secure(await handleScopeChange(request,env));
@@ -82,6 +83,7 @@ export default {
       // HTML shell. Fetching /index.html directly can trigger its canonical
       // route redirect instead of serving the document body.
       const shell=await env.ASSETS.fetch(request);
+      if(shell.headers.get('content-type')?.includes('text/html'))recordNavigation(request,env.TRAFFIC_ANALYTICS,shell.status);
       const headers=new Headers(shell.headers);
       headers.set('cache-control','no-store, no-cache, must-revalidate');
       headers.set('pragma','no-cache');

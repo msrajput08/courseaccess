@@ -20,5 +20,11 @@
     "crons": [
       "*/5 * * * *"
     ]
-  }
+  },
+  "analytics_engine_datasets": [
+    {
+      "binding": "TRAFFIC_ANALYTICS",
+      "dataset": "courseaccess_traffic"
+    }
+  ]
 }

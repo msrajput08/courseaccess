@@ -7,7 +7,7 @@ try{
  const page=await browser.newPage();let loaded=0;
  // Intercept Google so CI never creates real visitor analytics or triggers container tags.
  await page.route('https://www.googletagmanager.com/**',route=>{loaded++;assert.match(route.request().url(),/gtm\.js\?id=GTM-TDLVR6PD$/);return route.fulfill({contentType:'application/javascript',body:'window.__gtmTestLoaded=true;'});});
- await page.goto(origin+'/');await page.getByRole('button',{name:'Allow optional analytics',exact:true}).waitFor();assert.equal(loaded,0);
+ await page.goto(origin+'/');await page.getByRole('button',{name:'Analytics preferences',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Allow optional analytics',exact:true}).count(),0);assert.equal(loaded,0);await page.getByRole('button',{name:'Analytics preferences',exact:true}).click();
  await page.getByRole('button',{name:'Reject optional analytics',exact:true}).click();await page.goto(origin+'/pricing');await page.getByRole('button',{name:/Analytics preferences/}).waitFor();assert.equal(loaded,0);
  await page.getByRole('button',{name:/Analytics preferences/}).click();await page.getByRole('button',{name:'Allow optional analytics',exact:true}).click();await page.waitForFunction(()=>window.__gtmTestLoaded===true);
  assert.equal(loaded,1);assert.equal(await page.locator('#courseaccess-gtm').count(),1);
