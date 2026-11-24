@@ -3,8 +3,8 @@ import type {AccountEnv} from './accountSecurity';
 import { authorizeEntitlement, parsePlans } from './entitlements';
 type Env=AccountEnv & { ASSETS: {fetch:(request:Request)=>Promise<Response>}; COURSEACCESS_PLANS_JSON?:string; };
 const jsonHeaders={'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'};
-const knownPaths=['/','/checker','/pricing','/guides','/guides/pdf-accessibility-checker','/guides/accessible-lecture-notes','/guides/fix-inaccessible-pdfs','/guides/math-accessibility','/guides/academic-documents','/privacy','/terms'];
-const navigationPaths=new Set(['/','/checker','/workspace','/account','/pricing','/guides','/privacy','/terms']);
+const knownPaths=['/','/checker','/pricing','/guides','/guides/pdf-accessibility-checker','/guides/accessible-lecture-notes','/guides/fix-inaccessible-pdfs','/guides/math-accessibility','/guides/academic-documents','/privacy','/terms','/refunds'];
+const navigationPaths=new Set(['/','/checker','/workspace','/account','/pricing','/guides','/privacy','/terms','/refunds']);
 function isAppNavigation(pathname:string):boolean {
   return navigationPaths.has(pathname)||pathname.startsWith('/guides/');
 }

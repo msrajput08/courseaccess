@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { test, expect } from '@playwright/test';
 import {makePdf} from './fixtures';
 
-const routes=['/','/checker','/pricing','/workspace','/guides','/privacy'];
+const routes=['/','/checker','/pricing','/workspace','/guides','/privacy','/terms','/refunds'];
 for (const route of routes) {
   test('automated accessibility scan: '+route,async({page})=>{
     await page.goto(route);

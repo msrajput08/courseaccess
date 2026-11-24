@@ -9,7 +9,9 @@ test('live routes, API and SEO respond from the published Worker', async ({page,
   expect(await health.json()).toMatchObject({status:'ok',product:'CourseAccess'});
   const xml=await request.get('/sitemap.xml');
   expect(xml.ok()).toBe(true);
-  expect(await xml.text()).toContain('/checker');
+  const sitemap=await xml.text();
+  expect(sitemap).toContain('/checker');
+  expect(sitemap).toContain('/refunds');
   const robots=await request.get('/robots.txt');
   expect(robots.ok()).toBe(true);
   expect(await robots.text()).toContain('/sitemap.xml');
@@ -133,4 +135,17 @@ test('production Word DOCX imports and exports accessible HTML',async({page})=>{
   const html=await (await import('node:fs/promises')).readFile(await file.path(),'utf8');
   expect(html).toContain('<h2>Inclusive Biology Lesson</h2>');
   expect(errors).toEqual([]);
+});
+
+test('pricing and public legal policies are reachable and identify actual billing availability',async({page})=>{
+  await page.goto('/pricing');
+  await expect(page.getByText('Not available yet · No checkout').first()).toBeVisible();
+  for(const [path,title] of [['/terms','Terms of service'],['/privacy','Privacy policy'],['/refunds','Refund and cancellation policy']]){
+    const res=await page.goto(path);
+    expect(res?.status()).toBe(200);
+    await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
+    await expect(page.locator('footer a[href="/refunds"]')).toBeVisible();
+    await expect(page.getByRole('heading',{name:'Contact CourseAccess'})).toBeVisible();
+  }
+  await expect(page.getByText('No payment is required to use the current free offering.',{exact:false})).toBeVisible();
 });

@@ -236,3 +236,16 @@ test('professional studio produces table, accessible math and auditable reading 
   await page.locator('input[type=file]').setInputFiles({name:'rebuilt-lab.pdf',mimeType:'application/pdf',buffer:binary});
   await expect(page.getByRole('heading',{name:'rebuilt-lab.pdf'})).toBeVisible({timeout:30000});
 });
+
+test('pricing and public legal policies are reachable and identify actual billing availability',async({page})=>{
+  await page.goto('/pricing');
+  await expect(page.getByText('Not available yet · No checkout').first()).toBeVisible();
+  for(const [path,title] of [['/terms','Terms of service'],['/privacy','Privacy policy'],['/refunds','Refund and cancellation policy']]){
+    const res=await page.goto(path);
+    expect(res?.status()).toBe(200);
+    await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
+    await expect(page.locator('footer a[href="/refunds"]')).toBeVisible();
+    await expect(page.getByRole('heading',{name:'Contact CourseAccess'})).toBeVisible();
+  }
+  await expect(page.getByText('No payment is required to use the current free offering.',{exact:false})).toBeVisible();
+});
