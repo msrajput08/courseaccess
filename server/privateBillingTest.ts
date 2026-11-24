@@ -4,8 +4,9 @@ import {inboxEnabled} from './billingApi';
 const origin='https://courseaccess.minty-12-shar.workers.dev';
 export const TEST_DESCRIPTION='CourseAccess private live verification — zero cost';
 const obj=(v:unknown):Record<string,unknown>|null=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:null;
+export const validPrivateCode=(code:string)=>/^[A-Z0-9]{8,32}$/.test(code);
 export function safeTestDiscount(d:Record<string,unknown>,code:string,now=Date.now()):boolean{
- return typeof d.id==='string'&&/^dsc_[a-z0-9]{26}$/.test(d.id)&&d.description===TEST_DESCRIPTION&&d.code===code&&d.status==='active'&&d.type==='percentage'&&Number(d.amount)===100&&d.enabled_for_checkout===true&&d.recur===true&&d.maximum_recurring_intervals===null&&d.usage_limit===1&&d.times_used===0&&Array.isArray(d.restrict_to)&&d.restrict_to.length===1&&d.restrict_to[0]===PRICE_IDS.pro&&typeof d.expires_at==='string'&&Date.parse(d.expires_at)>now;
+ return typeof d.id==='string'&&/^dsc_[a-z0-9]{26}$/.test(d.id)&&d.description===TEST_DESCRIPTION&&typeof d.code==='string'&&d.code.toUpperCase()===code&&d.status==='active'&&d.type==='percentage'&&Number(d.amount)===100&&d.enabled_for_checkout===true&&d.recur===true&&d.maximum_recurring_intervals===null&&d.usage_limit===1&&d.times_used===0&&Array.isArray(d.restrict_to)&&d.restrict_to.length===1&&d.restrict_to[0]===PRICE_IDS.pro&&typeof d.expires_at==='string'&&Date.parse(d.expires_at)>now;
 }
 export async function handlePrivateTestStatus(req:Request,env:LiveCheckoutEnv):Promise<Response>{
  const account=await owner(req,env);
@@ -30,7 +31,7 @@ export async function handlePrivateTestCheckout(req:Request,env:LiveCheckoutEnv)
    return responseJSON({canceled:true});
   }
   const code=typeof body.code==='string'?body.code.trim().toUpperCase():'';
-  if(!/^CAQA[A-F0-9]{24}$/.test(code))return responseJSON({error:'Invalid private verification code.'},400);
+  if(!validPrivateCode(code))return responseJSON({error:'Invalid private verification code.'},400);
   const reply=await fetch('https://api.paddle.com/discounts?code='+encodeURIComponent(code),{headers:{Authorization:'Bearer '+env.PADDLE_LIVE_API_KEY,Accept:'application/json','Paddle-Version':'1'},redirect:'error',signal:AbortSignal.timeout(8000)});
   if(!reply.ok)return responseJSON({error:'Unable to verify private discount.'},503);
   const data=(await reply.json() as {data?:Record<string,unknown>[]}).data;
