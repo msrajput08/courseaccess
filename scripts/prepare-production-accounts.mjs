@@ -61,6 +61,9 @@ const required=[
   'organizations','organization_members','auth_rate_limits',
   'subscriptions','payment_event_receipts','d1_migrations',
   'idx_organization_one_owner',
+  'paddle_event_inbox','paddle_checkout_intents','paddle_subscription_holds',
+  'paddle_intent_owners','paid_review_history','idx_paddle_open_intent','idx_paddle_inbox_object',
+  'guard_paddle_intent_owner','guard_paid_account_delete','guard_paid_org_delete','guard_paid_org_transfer',
 ];
 const missing=required.filter(x=>!names.has(x));
 if(missing.length)throw Error('Refusing account activation: remote schema incomplete: '+missing.join(', '));

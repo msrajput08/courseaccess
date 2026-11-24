@@ -7,6 +7,8 @@ const canonical={id:sub,customer_id:customer,status:'active',updated_at:'2026-11
 describe('canonical provider state',()=>{
  it('accepts only the expected paid tier and provider identity',()=>{
   expect(canonicalSubscription(canonical)?.status).toBe('active');
+  expect(canonicalSubscription({...canonical,items:[{quantity:1,price:{id:PRICE_IDS.institution}}]})?.tier).toBe('institution');
+  expect(matchesInitialTransaction({id:tx,status:'completed',subscription_id:sub,customer_id:customer,items:[{quantity:1,price:{id:PRICE_IDS.institution}}]},tx,'institution')).toBe(true);
   expect(canonicalSubscription({...canonical,status:'paused'})?.status).toBe('past_due');
   expect(canonicalSubscription({...canonical,items:[{quantity:2,price:{id:PRICE_IDS.pro}}]})).toBeNull();
   expect(canonicalSubscription({...canonical,current_billing_period:null})).toBeNull();

@@ -1,6 +1,7 @@
 import {handleAccountApi} from './accountApi';
 import type {AccountEnv} from './accountSecurity';
-import { authorizeEntitlement, parsePlans } from './entitlements';
+import { parsePlans } from './entitlements';
+import {handleEntitlements,handlePaidReviewHistory} from './paidAccess';
 import {verifyPaddleWebhook} from './paddleWebhook';
 import {handleBillingStatus,handleLiveWebhook,type BillingEnv} from './billingApi';
 import {checkoutConfig,createCheckoutIntent,type LiveCheckoutEnv} from './liveCheckout';
@@ -51,7 +52,8 @@ export default {
     if(url.pathname==='/api/health'&&request.method==='GET')return reply({status:'ok',product:'CourseAccess',documentStorage:false});
     if(url.pathname.startsWith('/api/auth/')||url.pathname.startsWith('/api/organizations'))return secure(await handleAccountApi(request,env));
     if(url.pathname==='/api/plans'&&request.method==='GET')return reply({plans:parsePlans(env.COURSEACCESS_PLANS_JSON),billingEnabled:false});
-    if(url.pathname==='/api/entitlements'&&request.method==='GET')return reply({authenticated:false,paidFeaturesEnabled:false,features:{'pdf-inspection':authorizeEntitlement('pdf-inspection',null),'semantic-html':authorizeEntitlement('semantic-html',null),'advanced-remediation':false,'history-cloud':false,'team-workspace':false}});
+    if(url.pathname==='/api/entitlements'&&request.method==='GET')return secure(await handleEntitlements(request,env));
+    if(url.pathname==='/api/billing/review-history'&&['GET','POST','DELETE'].includes(request.method))return secure(await handlePaidReviewHistory(request,env));
     if(url.pathname==='/api/billing/checkout-config'&&request.method==='GET')return secure(await checkoutConfig(request,env));
     if(url.pathname==='/api/billing/checkout-intent'&&request.method==='POST')return secure(await createCheckoutIntent(request,env));
     if(url.pathname==='/api/billing/status'&&request.method==='GET')return secure(await handleBillingStatus(request,env));

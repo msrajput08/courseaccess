@@ -20,6 +20,8 @@ export default function LiveCheckoutPage(){
   const [status,setStatus]=useState('');
   const [prices,setPrices]=useState<LocalizedPrices>({});
   const [busy,setBusy]=useState(false);
+  const [organizations,setOrganizations]=useState<{id:string;display_name:string;role:string}[]>([]);
+  const [organizationId,setOrganizationId]=useState('');
   useEffect(()=>{
     let active=true;
     fetch('/api/billing/checkout-config',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error();return r.json() as Promise<Config>;}).then(async cfg=>{
@@ -34,11 +36,12 @@ export default function LiveCheckoutPage(){
     }).catch(()=>{if(active)setStatus('Localized pricing unavailable.');});
     return ()=>{active=false;};
   },[]);
-  async function open(){
+  useEffect(()=>{fetch('/api/auth/me',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(x=>{if(Array.isArray(x?.organizations))setOrganizations(x.organizations.filter((o:{role:string})=>o.role==='owner'));}).catch(()=>undefined);},[]);
+  async function open(tier:'pro'|'institution'){
     if(!config?.enabled||!config.clientToken||busy)return;
     setBusy(true);
     try{
-      const r=await fetch('/api/billing/checkout-intent',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({tier:'pro'})});
+      const r=await fetch('/api/billing/checkout-intent',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({tier,...(tier==='institution'?{organizationId}:{})})});
       if(r.status===401){setStatus('Please sign in to your CourseAccess account first.');return;}
       if(!r.ok)throw Error();
       const data=await r.json() as {transactionId?:string};
@@ -48,6 +51,6 @@ export default function LiveCheckoutPage(){
     }catch{setStatus('Checkout unavailable. Visit billing before retrying.');}finally{setBusy(false);}
   }
   return <main className="shell pricing"><div className="page-hero center"><div className="eyebrow"><i/> SECURE BILLING</div><h1>CourseAccess <em>checkout.</em></h1><p>{config?.enabled?'Choose your subscription.':'Paid subscriptions are not available for purchase yet.'}</p></div>
-    <div className="price-grid">{(['pro','institution'] as const).map(tier=><article className="price-card" key={tier}><h2>{tier==='pro'?'Professor Pro':'Institution'}</h2><p className="price-amount"><strong>{prices[tier]||(tier==='pro'?'$12':'$79')}</strong><small>/month</small></p>{tier==='pro'&&config?.enabled?<button className="button button-primary" disabled={busy} onClick={()=>void open()}>Continue to checkout</button>:<p>Not available yet</p>}</article>)}</div>
+    <div className="price-grid">{(['pro','institution'] as const).map(tier=><article className="price-card" key={tier}><h2>{tier==='pro'?'Professor Pro':'Institution'}</h2><p className="price-amount"><strong>{prices[tier]||(tier==='pro'?'$12':'$79')}</strong><small>/month</small></p>{config?.enabled?<>{tier==='institution'&&<><label htmlFor="billing-org">Institution you own</label><select id="billing-org" value={organizationId} onChange={e=>setOrganizationId(e.target.value)}><option value="">Choose institution</option>{organizations.map(o=><option key={o.id} value={o.id}>{o.display_name}</option>)}</select></>}<button className="button button-primary" disabled={busy||(tier==='institution'&&!organizationId)} onClick={()=>void open(tier)}>Continue to checkout</button></>:<p>Not available yet</p>}</article>)}</div>
     <p role="status" aria-live="polite">{status}</p><p className="pricing-disclaimer">Final localized price and applicable taxes are shown by Paddle at checkout. <a href="/account">Account</a> · <a href="/billing">Billing</a> · <a href="/checker">Free checker</a></p><p><a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a></p></main>;
 }

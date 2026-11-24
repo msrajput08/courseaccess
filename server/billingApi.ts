@@ -6,6 +6,7 @@ export interface BillingEnv extends AccountEnv {
   COURSEACCESS_LIVE_WEBHOOK_INBOX_ENABLED?:string;
   COURSEACCESS_PADDLE_RECONCILE_ENABLED?:string;
   PADDLE_LIVE_API_KEY?:string;
+  COURSEACCESS_PAID_FEATURES_ENABLED?:string;
 }
 const productionOrigin='https://courseaccess.minty-12-shar.workers.dev';
 // This is an inbox only. It must never enable a paid entitlement.

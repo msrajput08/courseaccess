@@ -1,4 +1,4 @@
-import {activeAccountService,getCookie,sessionCookie,sha256,responseJSON,requireSameOrigin,readBody,ApiError,type AccountEnv} from './accountSecurity';
+import {activeAccountService,getCookie,sessionCookie,sha256,responseJSON,requireSameOrigin,readBody,ApiError,validId,rateLimit,type AccountEnv} from './accountSecurity';
 import {inboxEnabled,type BillingEnv} from './billingApi';
 export const PRICE_IDS={pro:'pri_01m87cf8a3d6nedgenr8jmhzwc',institution:'pri_01m87chg5xqcnggt17wvsknvw9'} as const;
 export type CheckoutTier=keyof typeof PRICE_IDS;
@@ -19,7 +19,7 @@ export function checkoutConfig(req:Request,env:LiveCheckoutEnv):Response{
   const preview=(enabled||env.COURSEACCESS_LIVE_PRICE_PREVIEW_ENABLED==='true')&&new URL(req.url).origin===origin&&!!env.PADDLE_LIVE_CLIENT_TOKEN?.startsWith('live_');
   return responseJSON({enabled,preview,clientToken:preview?env.PADDLE_LIVE_CLIENT_TOKEN:null});
 }
-async function owner(req:Request,env:LiveCheckoutEnv):Promise<string|null>{
+export async function owner(req:Request,env:LiveCheckoutEnv):Promise<string|null>{
   if(!activeAccountService(req,env)||!env.DB)return null;
   const token=getCookie(req,sessionCookie);
   if(!token||!/^[a-zA-Z0-9_-]{40,50}$/.test(token))return null;
@@ -42,17 +42,29 @@ export async function createCheckoutIntent(req:Request,env:LiveCheckoutEnv):Prom
     if(!accountId)return responseJSON({error:'Sign in to continue.'},401);
     const body=await readBody(req);
     if(!validTier(body.tier))return responseJSON({error:'Unknown subscription plan.'},400);
-    // Institution ownership and organization entitlements need a separate audited flow.
-    if(body.tier==='institution')return responseJSON({error:'Institution checkout is not available yet.'},409);
     const db=env.DB!;
-    const subscribed=await db.prepare("SELECT id FROM subscriptions WHERE owner_kind='account' AND owner_id=? AND provider='paddle' AND status IN ('active','trialing','past_due') LIMIT 1").bind(accountId).first();
+    await rateLimit(db,req,'billing-intent',12);
+    const kind=body.tier==='institution'?'organization':'account';
+    const subject=kind==='organization'?body.organizationId:accountId;
+    if(!validId(subject))return responseJSON({error:'Select an organization you own.'},400);
+    if(kind==='organization'){
+      const membership=await db.prepare("SELECT 1 AS allowed FROM organization_members WHERE organization_id=? AND account_id=? AND role='owner'").bind(subject,accountId).first();
+      if(!membership)return responseJSON({error:'Only the institution owner can purchase.'},403);
+    }
+    const subscribed=await db.prepare("SELECT id FROM subscriptions WHERE owner_kind=? AND owner_id=? AND provider='paddle' AND status IN ('active','trialing','past_due') LIMIT 1").bind(kind,subject).first();
     if(subscribed)return responseJSON({error:'Manage your existing subscription.'},409);
     const intentId=crypto.randomUUID();
     // One unresolved intent per account. A network ambiguity must be reconciled
     // before creating another transaction; never blindly retry a charge flow.
-    const reserved=await db.prepare("INSERT INTO paddle_checkout_intents(id,account_id,tier,created_at_ms,state) VALUES(?,?,?,?,'creating') ON CONFLICT DO NOTHING").bind(intentId,accountId,body.tier,Date.now()).run();
-    if((reserved.meta?.changes??reserved.changes??0)!==1){
-      const previous=await db.prepare("SELECT transaction_id,tier,state FROM paddle_checkout_intents WHERE account_id=? AND state IN ('creating','ready','review') LIMIT 1").bind(accountId).first<{transaction_id:string|null;tier:string;state:string}>();
+    // Reserve the owner mapping in the same D1 transaction. The trigger checks
+    // organization ownership at write time, and locks competing open intents.
+    try{
+      await db.batch([
+        db.prepare("INSERT INTO paddle_checkout_intents(id,account_id,tier,created_at_ms,state) VALUES(?,?,?,?,'creating')").bind(intentId,accountId,body.tier,Date.now()),
+        db.prepare("INSERT INTO paddle_intent_owners(intent_id,owner_kind,owner_id) VALUES(?,?,?)").bind(intentId,kind,subject),
+      ]);
+    }catch{
+      const previous=await db.prepare("SELECT i.transaction_id,i.tier,i.state FROM paddle_checkout_intents i JOIN paddle_intent_owners o ON o.intent_id=i.id WHERE i.account_id=? AND o.owner_kind=? AND o.owner_id=? AND i.state IN ('creating','ready','review') LIMIT 1").bind(accountId,kind,subject).first<{transaction_id:string|null;tier:string;state:string}>();
       if(previous?.state==='ready'&&previous.tier===body.tier&&transactionId(previous.transaction_id))return responseJSON({transactionId:previous.transaction_id});
       return responseJSON({error:'An existing checkout requires reconciliation.'},409);
     }
