@@ -1,0 +1,3 @@
+# Paddle readiness
+
+Billing remains disabled. This branch contains a read-only preflight, not an integration or migration. It checks owner-provided live Pro ($12 monthly) and Institution ($79 monthly) IDs, availability of read endpoints, and credential prefixes; listing counts are first page only. No mutations, customer records, signing secrets or API responses are logged. Add scoped credentials as GitHub Actions secrets and rerun. Sandbox checkout and webhook tests, catalog comparison, live domain approval, payout configuration and verified account activation remain outstanding. Do not activate public checkout before all release gates pass. Do not duplicate or modify live catalog or destinations. No checkout endpoint or webhook handler is deployed by this branch.

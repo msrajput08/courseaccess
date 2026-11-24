@@ -1,0 +1,7 @@
+# Release status (payments disabled)
+
+- The existing live Cloudflare website is not a sandbox. This branch is a code candidate, not a deployment.
+- The billing page lists personal subscriptions and institution subscriptions owned by the current account. Customers use Paddle's receipt link to manage billing, cancel, obtain invoices and update payment methods. Direct authenticated portal sessions are intentionally withheld: the current account identity is passkey-only and a Paddle customer portal grants customer-wide access. A verified email/customer ownership flow must precede automatic portal sessions.
+- D1 production verification checks required tables, indexes and triggers, and reports missing migration tracking. The owner manually installed schema 0003–0006; this is not a verified migration ledger. Use Wrangler migrations apply under an authorized D1 write credential; do not manually fabricate migration entries.
+- Remaining release blockers: actual promised advanced remediation, batch and team features; reliable recovery for unresolved checkout intents; full signed event lifecycle test; deployment smoke tests; verified Paddle API write permissions; checkout default URL, approved release and real browser checkout verification. No charge or production activation is authorized by this commit.
+- Official provider reference: https://developer.paddle.com/build/customers/integrate-customer-portal/

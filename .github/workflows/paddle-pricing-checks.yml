@@ -1,0 +1,31 @@
+name: Paddle pricing preparation checks (no payment)
+on:
+  push:
+    branches: [billing/paddle-readiness]
+    paths: ["src/**","server/**","tests/**",".github/workflows/paddle-pricing-checks.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-audit --no-fund
+      - run: npm run check
+      - name: Verify billing database schema and ownership constraints
+        run: python3 scripts/test_billing_schema.py
+      - name: Verify live webhook secret is configured (no network or disclosure)
+        env:
+          PADDLE_LIVE_WEBHOOK_SECRET: ${{ secrets.PADDLE_LIVE_WEBHOOK_SECRET }}
+        shell: bash
+        run: |
+          if [[ -z "$PADDLE_LIVE_WEBHOOK_SECRET" ]]; then
+            echo "::error::Missing repository secret PADDLE_LIVE_WEBHOOK_SECRET."
+            exit 1
+          fi
+          echo "Webhook secret is configured; value not displayed. Authenticity requires a signed Paddle notification." >> "$GITHUB_STEP_SUMMARY"

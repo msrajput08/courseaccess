@@ -61,8 +61,18 @@ const required=[
   'organizations','organization_members','auth_rate_limits',
   'subscriptions','payment_event_receipts','d1_migrations',
   'idx_organization_one_owner',
+  'paddle_event_inbox','paddle_checkout_intents','paddle_subscription_holds',
+  'paddle_intent_owners','paid_review_history','idx_paddle_open_intent','idx_paddle_inbox_object',
+  'guard_paddle_intent_owner','guard_paid_account_delete','guard_paid_org_delete','guard_paid_org_transfer',
+  'idx_paddle_intent_owner','idx_paid_review_account',
 ];
 const missing=required.filter(x=>!names.has(x));
 if(missing.length)throw Error('Refusing account activation: remote schema incomplete: '+missing.join(', '));
+// Manual SQL installation is not the same as Wrangler migration tracking.
+const tracked=JSON.parse(cmd(['execute','DB','--remote','--config',tmp,'--json','--command','SELECT name FROM d1_migrations']));
+const applied=new Set(tracked.flatMap(x=>x.results||[]).map(x=>x.name));
+const billingMigrations=['0003_paddle_event_inbox.sql','0004_paddle_checkout_intents.sql','0005_paddle_subscription_holds.sql','0006_paddle_owners_and_history.sql'];
+const untracked=billingMigrations.filter(x=>!applied.has(x));
+if(untracked.length)console.log('Billing schema exists; migration tracking still pending: '+untracked.join(', '));
 console.log('Verified production D1 binding, schema and approved origin.');
 console.log('Generated temporary release config; account activation requires successful deployment.');
