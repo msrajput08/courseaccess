@@ -1,0 +1,20 @@
+name: Prepare one private zero-cost Paddle test discount
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/paddle-private-test.yml','scripts/prepare-private-test-discount.mjs']
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Create one restricted discount without exposing its code
+        env:
+          PADDLE_LIVE_API_KEY: ${{ secrets.PADDLE_LIVE_API_KEY }}
+        run: node scripts/prepare-private-test-discount.mjs

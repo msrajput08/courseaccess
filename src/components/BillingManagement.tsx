@@ -1,5 +1,6 @@
 import {useEffect,useState} from 'react';
 import {CreditCard,ExternalLink} from 'lucide-react';
+import PrivateBillingTest from './PrivateBillingTest';
 type Plan={status:string;periodEnd:number|null;scheduledAction?:string|null;scheduledAt?:number|null;scopeReview?:number|null};
 type Billing={authenticated:boolean;portalVerificationAvailable?:boolean;subscription:(Plan&{tier:string})|null;institutions:(Plan&{organizationId:string;name:string})[]};
 const date=(v:number)=>new Intl.DateTimeFormat(undefined,{dateStyle:'medium'}).format(v);
@@ -29,6 +30,7 @@ export default function BillingManagement({organizations}:{organizations:{id:str
  {(state.institutions||[]).map((org,i)=><div key={org.organizationId+':'+i}><h3>{org.name}</h3>{details(org)}<button className="button button-primary" disabled={busy} onClick={()=>void manage(org.organizationId,state.portalVerificationAvailable?'verify':undefined)}>Manage institution billing <ExternalLink size={16}/></button>{org.scopeReview===1&&<button className="button button-primary" disabled={busy} onClick={()=>void assign(org.organizationId)}>Apply Professor Pro to my account</button>}</div>)}</>}
  {verification&&<div><p>Enter the one-time code sent to your Paddle billing email. It expires in five minutes.</p><label htmlFor="billing-proof">Verification code</label><input id="billing-proof" autoComplete="one-time-code" value={code} onChange={e=>setCode(e.target.value)} maxLength={20}/><button className="button button-primary" disabled={busy||code.trim().length!==20} onClick={()=>void manage(verification.organizationId,'open')}>Open verified billing portal</button><button className="button button-quiet" disabled={busy} onClick={()=>void manage(verification.organizationId)}>Use Paddle email login instead</button></div>}
  {error&&<p role="alert">{error}</p>}
+ <PrivateBillingTest/>
  <p>Manage invoices, payment methods and cancellation in Paddle. You will verify your billing email there. You can also use the link in your Paddle receipt.</p>
  <p><a href="https://paddle.net/" target="_blank" rel="noopener noreferrer">Paddle buyer support</a> · <a href="/refunds">Refund policy</a></p></section>;
 }
