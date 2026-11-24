@@ -1,8 +1,11 @@
 import {activeAccountService,getCookie,sessionCookie,sha256,responseJSON,type AccountEnv} from './accountSecurity';
 import {verifyPaddleWebhook,type VerifiedPaddleEvent} from './paddleWebhook';
+import {reconcilePaddleEvent} from './paddleReconcile';
 export interface BillingEnv extends AccountEnv {
   PADDLE_LIVE_WEBHOOK_SECRET?:string;
   COURSEACCESS_LIVE_WEBHOOK_INBOX_ENABLED?:string;
+  COURSEACCESS_PADDLE_RECONCILE_ENABLED?:string;
+  PADDLE_LIVE_API_KEY?:string;
 }
 const productionOrigin='https://courseaccess.minty-12-shar.workers.dev';
 // This is an inbox only. It must never enable a paid entitlement.
@@ -44,6 +47,10 @@ export async function handleLiveWebhook(request:Request,env:BillingEnv):Promise<
     ]);
     // The eventual reconciliation consumer must fetch canonical provider state
     // and atomically apply entitlement changes before setting applied_at_ms.
+    if(env.COURSEACCESS_PADDLE_RECONCILE_ENABLED==='true'){
+      const applied=await reconcilePaddleEvent(env,event);
+      return responseJSON({received:true,applied});
+    }
     return responseJSON({received:true,applied:false});
   }catch{return responseJSON({error:'Webhook persistence unavailable; retry required.'},503);}
 }
