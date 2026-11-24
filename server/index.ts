@@ -1,5 +1,6 @@
 import {handleAccountApi} from './accountApi';
 import {defaultPaymentPage} from './defaultPaymentPage';
+import {handleBillingPortal} from './billingPortal';
 import {handleLiveWebhook,retryPaddleInbox,handleBillingStatus,type BillingEnv,type BillingExecutionContext} from './billingApi';
 import type {AccountEnv} from './accountSecurity';
 import { authorizeEntitlement, parsePlans } from './entitlements';
@@ -45,6 +46,7 @@ export default {
     const url=new URL(request.url);
     if(url.pathname==='/checkout'&&(request.method==='GET'||request.method==='HEAD'))return defaultPaymentPage(request,env.PADDLE_LIVE_CLIENT_TOKEN);
     if(url.pathname==='/api/billing/webhook'&&request.method==='POST')return secure(await handleLiveWebhook(request,env,ctx));
+    if(url.pathname==='/api/billing/portal'&&request.method==='POST')return secure(await handleBillingPortal(request,env));
     if(url.pathname==='/api/billing/status'&&request.method==='GET')return secure(await handleBillingStatus(request,env));
     if(url.pathname==='/api/health'&&request.method==='GET')return reply({status:'ok',product:'CourseAccess',documentStorage:false});
     if(url.pathname.startsWith('/api/auth/')||url.pathname.startsWith('/api/organizations'))return secure(await handleAccountApi(request,env));

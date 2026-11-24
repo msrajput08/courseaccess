@@ -17,7 +17,7 @@ export function canonicalSubscription(data:Record<string,unknown>){
   const statuses:Record<string,string>={active:'active',trialing:'trialing',past_due:'past_due',paused:'past_due',canceled:'canceled'};
   const status=typeof data.status==='string'&&Object.prototype.hasOwnProperty.call(statuses,data.status)?statuses[data.status]:null;
   if(updated===null||!status||((start===null)!==(end===null))||(start!==null&&end!==null&&end<=start))return null;
-  if(status==='active'&&(start===null||end===null))return null;
+  if((status==='active'||status==='trialing')&&(start===null||end===null))return null;
   const scheduled=obj(data.scheduled_change);
   return {id:data.id,customer:data.customer_id,tier,status,providerStatus:String(data.status),priceId:PRICE_IDS[tier],productId:PRODUCT_IDS[tier],scheduledAt:time(scheduled?.effective_at),scheduledAction:typeof scheduled?.action==='string'?scheduled.action:null,updated,start,end};
 }

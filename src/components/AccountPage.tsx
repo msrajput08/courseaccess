@@ -1,4 +1,5 @@
 import {useCallback,useEffect,useState} from 'react';
+import BillingManagement from './BillingManagement';
 import {startRegistration,startAuthentication} from '@simplewebauthn/browser';
 import {ArrowRight,CheckCircle2,Copy,KeyRound,LockKeyhole,ShieldCheck,Users,UserPlus} from 'lucide-react';
 
@@ -121,7 +122,7 @@ export default function AccountPage(){
   return <main className="shell account-page">
     <div className="eyebrow"><i/> YOUR SECURE SPACE</div>
     <div className="account-hero"><div><h1>Access built on <em>trust.</em></h1>
-      <p>Passkey security, private document processing and carefully scoped institution membership. Payments are not connected.</p>
+      <p>Passkey security, private document processing and carefully scoped institution membership. New paid subscriptions are not available yet.</p>
     </div><div className="account-hero-symbol" aria-hidden="true"><ShieldCheck size={54}/></div></div>
     {message&&<p className="account-banner account-success" role="status"><CheckCircle2 size={18}/>{message}</p>}
     {problem&&<p className="account-banner account-error" role="alert">{problem}</p>}
@@ -163,6 +164,7 @@ export default function AccountPage(){
           <button className="button button-primary" disabled={working} onClick={createOrg}>Create organization <ArrowRight size={16}/></button>
         </section>
       </div>
+      <BillingManagement/>
       <section className="account-panel account-membership">
         <h2>Organizations</h2>
         {organizations.length===0?<p>You are not in any institution workspace yet.</p>:
